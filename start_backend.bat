@@ -1,0 +1,19 @@
+@echo off
+echo Iniciando o backend Python...
+cd backend
+
+echo Verificando ambiente virtual...
+if not exist .venv (
+    echo Criando ambiente virtual pela primeira vez...
+    python -m venv .venv
+)
+
+echo Ativando ambiente virtual...
+call .venv\Scripts\activate
+
+echo Instalando/Atualizando dependencias (isso pode demorar na primeira vez)...
+pip install -r requirements.txt
+
+echo Iniciando servidor FastAPI...
+uvicorn main:app --reload
+pause
