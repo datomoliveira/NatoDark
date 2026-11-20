@@ -415,7 +415,14 @@ async def save_project_timeline(id: str, body: TimelineSave):
 
 @app.post("/api/projects/{id}/script")
 async def save_project_script(id: str, body: ScriptSave):
-    update_project_script(id, body.script, body.subtitle_mode, body.subtitle_style)
+    atual = get_project(id)
+    if not atual:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado.")
+    estilo = dict(atual.get("subtitle_style") or {})
+    estilo.update(body.subtitle_style or {})
+    # Preserva o srt_key salvo pelo /transcribe quando o frontend salva so o
+    # estilo visual novamente — senao a legenda sincronizada seria perdida.
+    update_project_script(id, body.script, body.subtitle_mode, estilo)
     return {"status": "sucesso", "message": "Configurações de legenda salvas."}
 
 @app.get("/api/providers")
@@ -506,6 +513,8 @@ def transcribe_project(id: str, body: TranscribeRequest = TranscribeRequest()):
     em `script_json`. O compiler passa a preferir esse SRT. Roda em thread
     separada pelo FastAPI (endpoint sync) para nao travar o servidor.
     """
+    if not get_project(id):
+        raise HTTPException(status_code=404, detail="Projeto não encontrado.")
     try:
         return sincronizar_projeto(
             id,

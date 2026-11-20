@@ -501,6 +501,8 @@ export default function NatoDarkStudio() {
       if (!res.ok) throw new Error(data.detail || "Erro na transcrição.");
 
       setTranscribeResult(data);
+      // Mantém a chave do SRT sincronizado no editor para não ser perdida ao salvar.
+      setEditorSubtitleStyle((prev: any) => ({ ...prev, srt_key: data.srt_key }));
       // Se não havia legenda, ativa "queimar" para o SRT sincronizado ser usado.
       setEditorSubtitleMode((prev: string) => (prev === "none" ? "burn" : prev));
       showToast("success", `${data.linhas_srt} linhas sincronizadas com a sua voz.`);
