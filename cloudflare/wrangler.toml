@@ -1,0 +1,17 @@
+name = "natodark-studio"
+main = "src/index.ts"
+compatibility_date = "2026-11-20"
+workers_dev = true
+
+# Provedor padrao. "auto" tenta: gemini, groq, openrouter, cloudflare,
+# openai, anthropic, ollama — pulando os que nao tem Secret configurado.
+[vars]
+SCRIPT_PROVIDER = "auto"
+SCRIPT_MODEL = ""
+
+# OPCIONAL: guardar roteiros gerados no R2 para buscar de qualquer lugar.
+# 1) crie o bucket: wrangler r2 bucket create natodark-roteiros
+# 2) descomente as tres linhas abaixo e rode wrangler deploy de novo.
+# [[r2_buckets]]
+# binding = "SCRIPTS"
+# bucket_name = "natodark-roteiros"

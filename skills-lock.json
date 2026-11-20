@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "skills": {
+    "ffmpeg": {
+      "source": "digitalsamba/claude-code-video-toolkit",
+      "commit": "a89a32078bf1bad0107a43c228de38ced2baee89",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/ffmpeg/SKILL.md",
+      "computedHash": "ff8e85c81bac9a0bc655b94893f06e60e34c42f3faa98ee60e2cdd51a0215013"
+    },
+    "retention-audit": {
+      "source": "yaxeen/storytelling-skills",
+      "commit": "24ef3c1e3d7fde66cc5f1c5953cd6c1d7afc0b4f",
+      "sourceType": "github",
+      "skillPath": "skills/retention-audit/SKILL.md",
+      "computedHash": "b92037ee81f0bf1b04794c153a4d8f81c530b42ad335c58d7b740e63e0862f30"
+    },
+    "video-editing": {
+      "source": "affaan-m/ECC",
+      "commit": "4adeee6732a12d1540f49a4d50a38ce8c97f9a53",
+      "sourceType": "github",
+      "skillPath": "skills/video-editing/SKILL.md",
+      "computedHash": "b1a66c7e9337e7030cfef7c5a8b2a519123e63c8fef710105118eab89641e505"
+    },
+    "youtube-scriptwriting": {
+      "source": "cdeistopened/skill-stack",
+      "commit": "d607d66198b250b12c8e05c6d265ddb73d871aa5",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/youtube-scriptwriting/SKILL.md",
+      "computedHash": "e5097d45811b21ac8ba672ef3d8d99d6f6ae5e1d59e45d2c9ad5941a5426f0c2"
+    }
+  }
+}
