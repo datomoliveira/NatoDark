@@ -59,6 +59,10 @@ REGRAS DE RETENCAO (obedeca todas):
 8. DURACAO: some as duracoes dos blocos ate chegar perto da duracao alvo
    informada, com tolerancia de 10 por cento.
 9. Zero enrollacao, zero cliche de "nao pule", zero metafora confusa.
+ 10. ANCORA: no primeiro bloco, cite um detalhe concreto (ano, lugar, objeto
+     ou profissao) antes da pergunta. Isso da credibilidade imediata ao relato.
+ 11. TITULO: persona comum + acao cotidiana + descoberta impactante. Exemplo:
+     "UM CAMINHONEIRO PAROU PARA JANTAR E DESCOBRIU ALGO ATERRORIZANTE".
 
 FORMATO DE SAIDA — responda SOMENTE com JSON valido, sem markdown e sem
 explicacao:
