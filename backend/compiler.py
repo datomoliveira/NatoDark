@@ -318,9 +318,21 @@ def compile_project_pipeline(project_id: str) -> str:
             if "sec_per_block" in styles:
                 seconds_per_block = float(styles["sec_per_block"])
                 
-            # Generate SRT locally in temp dir
+            # SRT: prefere o gerado pela voz do usuario (timestamps reais).
+            # Se nao houver, cai para a estimativa por sec_per_block.
             srt_path = os.path.join(temp_dir, "subtitles.srt")
-            if generate_srt(script, seconds_per_block, srt_path):
+            srt_pronto = False
+            srt_key_voz = (styles or {}).get("srt_key")
+            if srt_key_voz:
+                try:
+                    download_file(srt_key_voz, srt_path)
+                    srt_pronto = os.path.getsize(srt_path) > 0
+                    log_compile(project_id, f"Legenda sincronizada pela voz aplicada: {srt_key_voz}")
+                except Exception as exc:
+                    log_compile(project_id, f"Falha ao carregar legenda da voz ({exc}); usando estimativa.")
+            if not srt_pronto:
+                srt_pronto = generate_srt(script, seconds_per_block, srt_path)
+            if srt_pronto:
                 subtitled_video_path = os.path.join(temp_dir, "subtitled.mp4")
                 
                 # Command to burn subtitle

@@ -33,6 +33,9 @@ from compiler import (
 )
 from script_generator import generate_script, listar_provedores
 from media_scout import build_auto_timeline
+from transcriber import sincronizar_projeto
+from hype_research import pesquisar_hype
+import youtube_api
 
 # Sequential background job queue
 compilation_queue = asyncio.Queue()
@@ -226,6 +229,18 @@ class AutoMediaRequest(BaseModel):
     fontes: List[str] = ["pexels", "pixabay", "wikimedia"]
     usar_gemini: bool = True
     max_blocos: int = 12
+
+class TranscribeRequest(BaseModel):
+    model_size: Optional[str] = None
+    compute_type: Optional[str] = None
+    language: Optional[str] = None
+    alinhar: bool = True
+
+class HypeRequest(BaseModel):
+    tema: str
+    periodo: str = "week"
+    limite: int = 10
+    usar_llm: bool = True
 
 class AudioParameters(BaseModel):
     volume: float
@@ -480,6 +495,91 @@ def auto_media(id: str, body: AutoMediaRequest):
         raise HTTPException(status_code=400, detail=str(err))
     except Exception as err:
         raise HTTPException(status_code=500, detail=f"Falha ao buscar mídia: {err}")
+
+@app.post("/api/projects/{id}/transcribe")
+def transcribe_project(id: str, body: TranscribeRequest = TranscribeRequest()):
+    """
+    Ouve a VOZ enviada pelo usuario (faster-whisper, local) e sincroniza as
+    legendas com os timestamps reais da narração.
+
+    Salva o SRT sincronizado no storage (`subtitle_style.srt_key`) e os timings
+    em `script_json`. O compiler passa a preferir esse SRT. Roda em thread
+    separada pelo FastAPI (endpoint sync) para nao travar o servidor.
+    """
+    try:
+        return sincronizar_projeto(
+            id,
+            model_size=body.model_size,
+            compute_type=body.compute_type,
+            language=body.language,
+            alinhar=body.alinhar,
+        )
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    except FileNotFoundError as err:
+        raise HTTPException(status_code=404, detail=str(err))
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"Falha na transcrição: {err}")
+
+@app.post("/api/hype/research")
+def hype_research_endpoint(body: HypeRequest):
+    """
+    Pesquisa o que está bombando via HTML do YouTube + DuckDuckGo (sem API key)
+    e sugere angulos originais via router de LLMs.
+    """
+    try:
+        return pesquisar_hype(
+            body.tema,
+            periodo=body.periodo,
+            limite=body.limite,
+            usar_llm=body.usar_llm,
+        )
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"Falha na pesquisa de hype: {err}")
+
+@app.get("/api/youtube/config")
+def youtube_config():
+    """Informa se a API oficial do YouTube está disponível (sem expor a chave)."""
+    return {
+        "configurada": youtube_api.configurado(),
+        "fonte": "YOUTUBE_API_KEY / YOUTUBE_DATA_API_KEY",
+        "observacao": (
+            "A API nao expoe o grafico de retencao; isso so existe no YouTube Studio. "
+            "A pesquisa de hype continua usando HTML do navegador, sem cota."
+        ),
+    }
+
+@app.get("/api/youtube/video/{video_id}")
+def youtube_video(video_id: str):
+    """Metadados e estatisticas de um video (usa API oficial, se configurada)."""
+    try:
+        return youtube_api.video_info(video_id)
+    except RuntimeError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=str(err))
+
+@app.get("/api/youtube/video/{video_id}/comments")
+def youtube_comments(video_id: str, limite: int = 20):
+    """Comentarios de um video para extrair dor do publico."""
+    try:
+        return {"comentarios": youtube_api.comentarios(video_id, limite)}
+    except RuntimeError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=str(err))
+
+@app.get("/api/youtube/channel/{channel_id}/videos")
+def youtube_channel_videos(channel_id: str, limite: int = 10):
+    """Ultimos videos de um canal (para comparar com a sua producao)."""
+    try:
+        return {"videos": youtube_api.canal_videos(channel_id, limite)}
+    except RuntimeError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=str(err))
 
 @app.post("/api/projects/{id}/audio-parameters")
 async def save_audio_parameters(id: str, body: AudioParameters):

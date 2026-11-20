@@ -8,6 +8,13 @@
       "skillPath": ".claude/skills/ffmpeg/SKILL.md",
       "computedHash": "ff8e85c81bac9a0bc655b94893f06e60e34c42f3faa98ee60e2cdd51a0215013"
     },
+    "remotion-best-practices": {
+      "source": "remotion-dev/skills",
+      "commit": "6f55706d1069e512430582ad86e4e57dc07afe1b",
+      "sourceType": "github",
+      "skillPath": "skills/remotion-best-practices/SKILL.md",
+      "computedHash": "3a00c916c1a0ee0ccb64b27b08049508d712d65c04ee1bd84d96709854c488e4"
+    },
     "retention-audit": {
       "source": "yaxeen/storytelling-skills",
       "commit": "24ef3c1e3d7fde66cc5f1c5953cd6c1d7afc0b4f",

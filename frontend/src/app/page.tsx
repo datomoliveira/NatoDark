@@ -25,7 +25,9 @@ import {
   FolderHeart,
   FileVideo,
   FileAudio,
-  Sparkles
+  Sparkles,
+  Mic,
+  TrendingUp
 } from "lucide-react";
 
 // API Base configuration
@@ -66,6 +68,16 @@ export default function NatoDarkStudio() {
   const [provedoresInfo, setProvedoresInfo] = useState<any[]>([]);
   const [autoMediaLoading, setAutoMediaLoading] = useState(false);
   const [autoMediaResult, setAutoMediaResult] = useState<any>(null);
+
+  // Sincronização com a VOZ do usuario (faster-whisper, local)
+  const [transcribeLoading, setTranscribeLoading] = useState(false);
+  const [transcribeResult, setTranscribeResult] = useState<any>(null);
+
+  // Pesquisa de hype via navegador (sem API key do YouTube)
+  const [hypeTema, setHypeTema] = useState("");
+  const [hypePeriodo, setHypePeriodo] = useState("week");
+  const [hypeLoading, setHypeLoading] = useState(false);
+  const [hypeResult, setHypeResult] = useState<any>(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/providers`)
@@ -463,6 +475,68 @@ export default function NatoDarkStudio() {
       showToast("error", err?.message || "Falha ao buscar mídia.");
     } finally {
       setAutoMediaLoading(false);
+    }
+  };
+
+  // Sincronizar legendas com a narração enviada pelo usuário (faster-whisper local)
+  const handleTranscribe = async () => {
+    if (!selectedProjectId) {
+      showToast("error", "Selecione um projeto com áudio de voz enviado.");
+      return;
+    }
+    if (!audioKey && !selectedProject?.audio_file) {
+      showToast("error", "Envie a sua narração na aba de áudio primeiro.");
+      return;
+    }
+
+    setTranscribeLoading(true);
+    setTranscribeResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/projects/${selectedProjectId}/transcribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alinhar: true })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Erro na transcrição.");
+
+      setTranscribeResult(data);
+      // Se não havia legenda, ativa "queimar" para o SRT sincronizado ser usado.
+      setEditorSubtitleMode((prev: string) => (prev === "none" ? "burn" : prev));
+      showToast("success", `${data.linhas_srt} linhas sincronizadas com a sua voz.`);
+    } catch (err: any) {
+      showToast("error", err?.message || "Falha ao sincronizar a legenda.");
+    } finally {
+      setTranscribeLoading(false);
+    }
+  };
+
+  // Pesquisar tendências no navegador (sem API key / sem cota)
+  const handleHypeResearch = async () => {
+    const tema = hypeTema.trim() || scriptTema.trim();
+    if (!tema) {
+      showToast("error", "Digite um tema para pesquisar o hype.");
+      return;
+    }
+
+    setHypeLoading(true);
+    setHypeResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/hype/research`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tema, periodo: hypePeriodo, limite: 10, usar_llm: true })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Erro na pesquisa.");
+
+      setHypeResult(data);
+      if (tema !== scriptTema) setScriptTema(tema);
+      showToast("success", `${data.videos?.length || 0} vídeos analisados.`);
+    } catch (err: any) {
+      showToast("error", err?.message || "Falha na pesquisa de hype.");
+    } finally {
+      setHypeLoading(false);
     }
   };
 
@@ -1704,6 +1778,156 @@ export default function NatoDarkStudio() {
                           </div>
                         )}
                       </div>
+                    </div>
+
+                    {/* Sincronização com a voz do usuário */}
+                    <div className="bg-[#111] border border-[#222] rounded-xl p-5 flex flex-col gap-4">
+                      <div>
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2 mb-1">
+                          <Mic className="w-4 h-4 text-[#8B0000]" /> Sincronizar com minha voz
+                        </h3>
+                        <p className="text-[11px] text-gray-500">
+                          O Whisper escuta a narração que você enviou e encaixa cada legenda no tempo real da fala.
+                          Roda local, sem custo e sem enviar áudio para terceiros.
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={handleTranscribe}
+                        disabled={transcribeLoading || !selectedProjectId}
+                        className="nd-btn nd-btn-primary w-full"
+                      >
+                        {transcribeLoading ? (
+                          <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Ouvindo sua voz...</>
+                        ) : (
+                          <><Mic className="w-3.5 h-3.5" /> Sincronizar legenda com minha voz</>
+                        )}
+                      </button>
+
+                      {transcribeResult && (
+                        <div className="bg-black/40 border border-[#8B0000]/30 rounded-lg p-3 flex flex-col gap-1.5 text-[10px] text-gray-400">
+                          <div className="flex flex-wrap gap-1.5">
+                            <span className="nd-chip">{transcribeResult.modelo} · {transcribeResult.idioma}</span>
+                            <span className="nd-chip">{transcribeResult.duracao_segundos}s</span>
+                            <span className="nd-chip">{transcribeResult.segmentos} falas</span>
+                            <span className="nd-chip">{transcribeResult.linhas_srt} linhas SRT</span>
+                            <span className="nd-chip">{transcribeResult.blocos_alinhados} blocos</span>
+                          </div>
+                          <a
+                            href={`${API_BASE}${transcribeResult.srt_url}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[#e5a1a1] hover:underline w-fit"
+                          >
+                            Baixar SRT sincronizado
+                          </a>
+                          <p className="nd-muted">{transcribeResult.dica}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Pesquisa de hype via navegador */}
+                    <div className="bg-[#111] border border-[#222] rounded-xl p-5 flex flex-col gap-4">
+                      <div>
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2 mb-1">
+                          <TrendingUp className="w-4 h-4 text-[#8B0000]" /> Pesquisa Hype
+                        </h3>
+                        <p className="text-[11px] text-gray-500">
+                          Lê o que está bombando no YouTube pelo HTML do navegador — sem chave de API e sem cota.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <input
+                          className="nd-input"
+                          placeholder="Tema (ex.: mistérios que a ciência não explica)"
+                          value={hypeTema}
+                          onChange={(e) => setHypeTema(e.target.value)}
+                        />
+                        <div className="flex gap-2">
+                          <select
+                            className="nd-input flex-1"
+                            value={hypePeriodo}
+                            onChange={(e) => setHypePeriodo(e.target.value)}
+                          >
+                            <option value="day">Último dia</option>
+                            <option value="week">Última semana</option>
+                            <option value="month">Último mês</option>
+                            <option value="year">Último ano</option>
+                          </select>
+                          <button onClick={handleHypeResearch} disabled={hypeLoading} className="nd-btn nd-btn-primary">
+                            {hypeLoading ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <><TrendingUp className="w-3.5 h-3.5" /> Pesquisar</>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {hypeResult && (
+                        <div className="flex flex-col gap-2">
+                          <span className="text-[9px] text-gray-500">
+                            {hypeResult.fonte} · {hypeResult.videos?.length || 0} vídeos · {hypeResult.web?.length || 0} páginas
+                          </span>
+
+                          {(hypeResult.videos || []).map((v: any) => (
+                            <a
+                              key={v.id}
+                              href={v.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex gap-2 bg-black/40 border border-[#222] rounded-lg p-2 hover:border-[#8B0000] transition-colors"
+                            >
+                              <img src={v.thumbnail} alt="" className="w-16 h-10 object-cover rounded shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] text-white truncate">{v.titulo}</p>
+                                <p className="text-[9px] text-gray-500 truncate">
+                                  {v.canal} · {v.views_texto} · {v.idade} · {v.views_por_dia}/dia
+                                </p>
+                              </div>
+                              <span className="nd-chip h-fit shrink-0" title="Hype score">{v.hype_score}</span>
+                            </a>
+                          ))}
+
+                          {hypeResult.sugestoes && (
+                            <div className="border-t border-[#222] pt-2 flex flex-col gap-1">
+                              <p className="text-[10px] font-bold text-white">Ângulos sugeridos</p>
+                              {(hypeResult.sugestoes.titulos || []).map((titulo: string, i: number) => (
+                                <button
+                                  key={`titulo-${i}`}
+                                  onClick={() => {
+                                    setScriptTema(titulo);
+                                    showToast("success", "Título aplicado ao gerador de roteiro.");
+                                  }}
+                                  className="text-left text-[10px] text-gray-300 hover:text-white hover:underline"
+                                >
+                                  → {titulo}
+                                </button>
+                              ))}
+                              {(hypeResult.sugestoes.angulos || []).map((angulo: string, i: number) => (
+                                <button
+                                  key={`angulo-${i}`}
+                                  onClick={() => {
+                                    setScriptTema(angulo);
+                                    showToast("success", "Ângulo aplicado ao gerador de roteiro.");
+                                  }}
+                                  className="text-left text-[10px] text-gray-400 hover:text-white"
+                                >
+                                  · {angulo}
+                                </button>
+                              ))}
+                              {hypeResult.sugestoes.insight && (
+                                <p className="nd-muted text-[10px]">{hypeResult.sugestoes.insight}</p>
+                              )}
+                            </div>
+                          )}
+
+                          {(hypeResult.erros || []).map((erro: string, i: number) => (
+                            <p key={`erro-${i}`} className="text-[9px] text-amber-500/80">{erro}</p>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                   </div>
