@@ -10,16 +10,36 @@ export type ProviderId =
   | "cloudflare"
   | "openai"
   | "anthropic"
-  | "ollama";
+  | "ollama"
+  | "kilocode"
+  | "llm7"
+  | "aionlabs"
+  | "axforge"
+  | "zai"
+  | "gonka"
+  | "modelscope"
+  | "siliconflow"
+  | "ovh"
+  | "cohere";
 
 export const ORDEM_FALLBACK: ProviderId[] = [
   "gemini",
   "nvidia",
   "groq",
   "openrouter",
+  "kilocode",
+  "llm7",
+  "aionlabs",
+  "axforge",
+  "zai",
+  "gonka",
+  "modelscope",
+  "siliconflow",
   "cloudflare",
+  "ovh",
   "openai",
   "anthropic",
+  "cohere",
   "ollama",
 ];
 
@@ -29,6 +49,7 @@ type Meta = {
   envChave: string[];
   envModelo: string;
   modeloPadrao: string;
+  baseUrl?: string;
   configurado: (env: Env) => boolean;
 };
 
@@ -71,7 +92,98 @@ export const PROVIDERS: Record<ProviderId, Meta> = {
     envChave: ["OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY"],
     envModelo: "OPENROUTER_MODEL",
     modeloPadrao: "meta-llama/llama-3.3-70b-instruct:free",
-    configurado: (e) => !!primeiroEnv(e, ["OPENROUTER_API_KEY"]),
+    configurado: (e) => !!primeiroEnv(e, ["OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY"]),
+  },
+  // awesome-free-llm-apis — 3 aprovados em teste real, sem chave.
+  kilocode: {
+    nome: "Kilo Code Gateway",
+    custo: "gratuito (sem chave)",
+    envChave: [],
+    envModelo: "KILOCODE_MODEL",
+    modeloPadrao: "kilo-auto/free",
+    baseUrl: "https://api.kilo.ai/api/gateway",
+    configurado: () => true,
+  },
+  llm7: {
+    nome: "LLM7.io",
+    custo: "gratuito (anonimo)",
+    envChave: [],
+    envModelo: "LLM7_MODEL",
+    modeloPadrao: "gpt-oss:20b",
+    baseUrl: "https://api.llm7.io/v1",
+    configurado: () => true,
+  },
+  ovh: {
+    nome: "OVHcloud AI Endpoints",
+    custo: "gratuito (anonimo, 2 RPM/IP)",
+    envChave: [],
+    envModelo: "OVH_MODEL",
+    modeloPadrao: "Meta-Llama-3_3-70B-Instruct",
+    baseUrl: "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
+    configurado: () => true,
+  },
+  aionlabs: {
+    nome: "Aion Labs",
+    custo: "gratuito (20K tokens/dia)",
+    envChave: ["AION_API_KEY"],
+    envModelo: "AION_MODEL",
+    modeloPadrao: "aion-labs/aion-3.0-mini",
+    baseUrl: "https://api.aionlabs.ai/v1",
+    configurado: (e) => !!primeiroEnv(e, ["AION_API_KEY"]),
+  },
+  axforge: {
+    nome: "AxForge",
+    custo: "gratuito (3M tokens/30 dias)",
+    envChave: ["AXFORGE_API_KEY"],
+    envModelo: "AXFORGE_MODEL",
+    modeloPadrao: "glm-5.3-flash",
+    baseUrl: "https://api.axforge.ai/v1",
+    configurado: (e) => !!primeiroEnv(e, ["AXFORGE_API_KEY"]),
+  },
+  zai: {
+    nome: "Z AI / Zhipu",
+    custo: "gratuito (flash)",
+    envChave: ["ZAI_API_KEY"],
+    envModelo: "ZAI_MODEL",
+    modeloPadrao: "glm-4.7-flash",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    configurado: (e) => !!primeiroEnv(e, ["ZAI_API_KEY"]),
+  },
+  gonka: {
+    nome: "Gonka Broker",
+    custo: "gratuito (phone verification)",
+    envChave: ["GONKA_API_KEY"],
+    envModelo: "GONKA_MODEL",
+    modeloPadrao: "deepseek-ai/DeepSeek-V4-Flash-0731",
+    baseUrl: "https://proxy.gonkabroker.com/v1",
+    configurado: (e) => !!primeiroEnv(e, ["GONKA_API_KEY"]),
+  },
+  modelscope: {
+    nome: "ModelScope",
+    custo: "gratuito (real-name)",
+    envChave: ["MODELSCOPE_API_KEY"],
+    envModelo: "MODELSCOPE_MODEL",
+    modeloPadrao: "Qwen/Qwen3.5-35B-A3B",
+    baseUrl: "https://api-inference.modelscope.cn/v1",
+    configurado: (e) => !!primeiroEnv(e, ["MODELSCOPE_API_KEY"]),
+  },
+  siliconflow: {
+    nome: "SiliconFlow",
+    custo: "gratuito (verificacao)",
+    envChave: ["SILICONFLOW_API_KEY"],
+    envModelo: "SILICONFLOW_MODEL",
+    modeloPadrao: "tencent/Hunyuan-MT-7B",
+    baseUrl: "https://api.siliconflow.cn/v1",
+    configurado: (e) => !!primeiroEnv(e, ["SILICONFLOW_API_KEY"]),
+  },
+  cohere: {
+    nome: "Cohere (trial nao-comercial)",
+    custo: "trial — EVAR em video monetizado",
+    envChave: ["COHERE_API_KEY"],
+    envModelo: "COHERE_MODEL",
+    modeloPadrao: "command-r-08-2024",
+    baseUrl: "https://api.cohere.ai/compatibility/v1",
+    configurado: (e) => !!primeiroEnv(e, ["COHERE_API_KEY"]),
   },
   cloudflare: {
     nome: "Cloudflare Workers AI",
@@ -130,8 +242,10 @@ export function segredo(env: Env, mensagem: string): string {
       if (valor.length > 6) texto = texto.split(valor).join("***");
     }
   }
-  const chaveOllama = primeiroEnv(env, ["OLLAMA_API_KEY"]);
-  if (chaveOllama.length > 6) texto = texto.split(chaveOllama).join("***");
+  for (const nome of ["OLLAMA_API_KEY", "LLM7_API_KEY"]) {
+    const valor = primeiroEnv(env, [nome]);
+    if (valor.length > 6) texto = texto.split(valor).join("***");
+  }
   return texto;
 }
 
@@ -162,8 +276,8 @@ async function chatarCompat(
   c: Chamada,
 ): Promise<string> {
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${chave}`,
     "Content-Type": "application/json",
+    ...(chave ? { Authorization: `Bearer ${chave}` } : {}),
     ...headersExtra,
   };
   const payload: Record<string, any> = {
@@ -291,6 +405,23 @@ async function chamarOllama(env: Env, c: Chamada): Promise<string> {
   return String(dados.message?.content ?? "");
 }
 
+async function chamarCompatBase(env: Env, id: ProviderId, c: Chamada) {
+  const meta = PROVIDERS[id];
+  if (!meta.baseUrl) throw new Error(`${id}: baseUrl nao configurada.`);
+  const modelo = c.modelo || primeiroEnv(env, [meta.envModelo]) || meta.modeloPadrao;
+  const chave = primeiroEnv(env, meta.envChave);
+  if (meta.envChave.length && !chave) {
+    throw new Error(`${meta.envChave[0]} nao configurada.`);
+  }
+  const texto = await chatarCompat(
+    `${meta.baseUrl.replace(/\/$/, "")}/chat/completions`,
+    chave,
+    {},
+    { ...c, modelo },
+  );
+  return { texto, modelo };
+}
+
 export async function chamarProvider(
   env: Env,
   id: ProviderId,
@@ -360,6 +491,17 @@ export async function chamarProvider(
     }
     case "ollama":
       return { texto: await chamarOllama(env, chamada), modelo };
+    case "kilocode":
+    case "llm7":
+    case "ovh":
+    case "aionlabs":
+    case "axforge":
+    case "zai":
+    case "gonka":
+    case "modelscope":
+    case "siliconflow":
+    case "cohere":
+      return chamarCompatBase(env, id, chamada);
   }
 }
 

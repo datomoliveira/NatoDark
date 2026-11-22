@@ -8,8 +8,9 @@ e sem expor chave na API.
 
 | Tarefa | Onde | Por quê |
 |---|---|---|
-| Gerar roteiro (router multi-provider) | **Worker** ✅ | É só uma chamada HTTP ao modelo; cabe tranquilo no Workers |
-| Escolher queries de mídia por bloco | Worker / backend ✅ | Também é só texto |
+| Gerar roteiro (router multi-provider) | **Pages Function** `/api/*` ✅ | Roda no mesmo projeto Pages e enxerga os Secrets já cadastrados |
+| Escolher queries de mídia por bloco | Pages Function / backend ✅ | Também é só texto |
+| Worker separado `natodark-studio` | opcional | Útil se quiser rodar a API fora do Pages; exige seus próprios Secrets |
 | Buscar stock (Pexels/Pixabay/Openverse/Wikimedia) | backend local ✅ | Precisa das chaves de stock e storage |
 | Cortar/compilar com ffmpeg | **local / VPS** ❌ no Worker | Workers têm 10 ms de CPU no plano free, 128 MB de memória e nenhum binário ffmpeg |
 
@@ -54,26 +55,41 @@ O Worker usa `SCRIPT_PROVIDER=auto` (definido em `wrangler.toml`) e tenta,
 nesta ordem, o primeiro que responder:
 
 ```
-gemini -> nvidia -> groq -> openrouter -> cloudflare -> openai -> anthropic -> ollama
+gemini -> nvidia -> groq -> openrouter
+-> kilocode -> llm7 -> aionlabs -> axforge -> zai -> gonka
+-> modelscope -> siliconflow -> cloudflare -> ovh
+-> openai -> anthropic -> cohere -> ollama
 ```
+
+Do repositório [awesome-free-llm-apis](https://github.com/mnfst/awesome-free-llm-apis),
+três provedores foram **testados ao vivo e aprovados sem chave**:
+Kilo Code (`kilo-auto/free`), LLM7.io (`gpt-oss:20b`) e OVHcloud
+(`Meta-Llama-3_3-70B-Instruct`, reserva por causa do limite de 2 RPM/IP).
+Os demais entram no router assim que a chave correspondente existir.
+`Cohere` está marcado como **não-comercial** — evitar em vídeo monetizado.
 
 ### Pages x Worker (importante)
 
 O site (`natodark.pages.dev`) é **Cloudflare Pages** e o build roda na raiz do
 repo (`npm run build` → `frontend/out` copiado para `dist/`; veja `wrangler.toml`
-da raiz). A API é um **Worker separado** (`natodark-studio`, config em
-`cloudflare/wrangler.toml`). Pages não aceita `main` de Worker.
+da raiz). A API principal é a **Pages Function** em `functions/api/[[path]].ts`
+— mesma origem, mesma conta, mesmos Secrets. O `cloudflare/` aqui é o Worker
+separado opcional (Pages não aceita `main` de Worker).
 
-As chaves precisam estar como **Secret do Worker** (`wrangler secret put ...`),
-não como variável do Pages. A Cloudflare **nunca devolve o valor de um Secret**
-pela API — só lista o nome. Por isso, se você cadastrou as chaves no Pages,
-elas não aparecem na listagem e o Worker não as enxerga: refaça como Secret do
-Worker com os comandos acima.
+As chaves que você já cadastrou como **Pages Secrets** são usadas direto pela
+Pages Function em `functions/api/[[path]].ts`. Não é preciso copiá-las para o
+Worker. A Cloudflare **nunca devolve o valor de um Secret** pela API — só lista
+o nome (confirmado: `GEMINI_API_KEY`, `NVIDIA_API_KEY`, `OLLAMA_API_KEY` e
+`OPEN_ROUTER_API_KEY` estão no Pages).
+
+`dist/_routes.json` garante que a Function só seja invocada em `/api/*`; o site
+estático continua grátis. Os comandos `wrangler secret put` acima valem apenas
+se você optar por usar também o Worker separado.
 
 Depois de configurar, teste antes de aprovar:
 
 ```bash
-curl -s https://<seu-worker>/api/models/health \
+curl -s https://natodark.pages.dev/api/models/health \
   -H 'Content-Type: application/json' \
   -d '{"testar_todos": true}'
 ```
@@ -99,11 +115,11 @@ URL final: `https://natodark-studio.<seu-subdominio>.workers.dev`
 
 ```bash
 # Descobre quais provedores estão configurados (nunca devolve as chaves)
-curl https://natodark-studio.SEU.workers.dev/api/providers \
+curl https://natodark.pages.dev/api/providers \
   -H 'Authorization: Bearer SEU_API_TOKEN'
 
 # Gera o roteiro
-curl -X POST https://natodark-studio.SEU.workers.dev/api/scripts/generate \
+curl -X POST https://natodark.pages.dev/api/scripts/generate \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer SEU_API_TOKEN' \
   -d '{

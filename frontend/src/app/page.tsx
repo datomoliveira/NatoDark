@@ -35,7 +35,7 @@ import {
 const API_BASE = (
   process.env.NEXT_PUBLIC_API_BASE ||
   (typeof window !== "undefined" && !/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
-    ? "https://natodark-studio.datomoliveira.workers.dev"
+    ? "" // em producao a API e a propria Pages Function, na mesma origem
     : "http://localhost:8000")
 ).replace(/\/$/, "");
 

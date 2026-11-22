@@ -39,8 +39,10 @@ import requests
 
 TIMEOUT = (10, 60)
 ORDEM_FALLBACK = (
-    "gemini", "nvidia", "groq", "openrouter", "cloudflare",
-    "openai", "anthropic", "ollama",
+    "gemini", "nvidia", "groq", "openrouter",
+    "kilocode", "llm7", "aionlabs", "axforge", "zai", "gonka",
+    "modelscope", "siliconflow", "cloudflare", "ovh",
+    "openai", "anthropic", "cohere", "ollama",
 )
 
 
@@ -73,6 +75,93 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
         "env_chave": ("OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY"),
         "modelo": os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"),
         "env_modelo": "OPENROUTER_MODEL",
+    },
+    # --- Provedores do repositorio awesome-free-llm-apis (testados/sem chave) ---
+    "kilocode": {
+        "nome": "Kilo Code Gateway",
+        "custo": "gratuito (sem chave)",
+        "env_chave": (),
+        "base_url": "https://api.kilo.ai/api/gateway",
+        "modelo": os.environ.get("KILOCODE_MODEL", "kilo-auto/free"),
+        "env_modelo": "KILOCODE_MODEL",
+        "nota": "APROVADO em teste real: 200, JSON valido, ~1.5s.",
+    },
+    "llm7": {
+        "nome": "LLM7.io",
+        "custo": "gratuito (anonimo; token opcional)",
+        "env_chave": (),
+        "env_opcional": ("LLM7_API_KEY",),
+        "base_url": "https://api.llm7.io/v1",
+        "modelo": os.environ.get("LLM7_MODEL", "gpt-oss:20b"),
+        "env_modelo": "LLM7_MODEL",
+        "nota": "APROVADO em teste real: 200, JSON valido, ~3s.",
+    },
+    "aionlabs": {
+        "nome": "Aion Labs",
+        "custo": "gratuito (20K tokens/dia)",
+        "env_chave": ("AION_API_KEY",),
+        "base_url": "https://api.aionlabs.ai/v1",
+        "modelo": os.environ.get("AION_MODEL", "aion-labs/aion-3.0-mini"),
+        "env_modelo": "AION_MODEL",
+        "nota": "Especializado em roleplay/storytelling — otimo para roteiro dark.",
+    },
+    "axforge": {
+        "nome": "AxForge",
+        "custo": "gratuito (3M tokens/30 dias)",
+        "env_chave": ("AXFORGE_API_KEY",),
+        "base_url": "https://api.axforge.ai/v1",
+        "modelo": os.environ.get("AXFORGE_MODEL", "glm-5.3-flash"),
+        "env_modelo": "AXFORGE_MODEL",
+    },
+    "zai": {
+        "nome": "Z AI / Zhipu",
+        "custo": "gratuito (modelos flash)",
+        "env_chave": ("ZAI_API_KEY",),
+        "base_url": "https://open.bigmodel.cn/api/paas/v4",
+        "modelo": os.environ.get("ZAI_MODEL", "glm-4.7-flash"),
+        "env_modelo": "ZAI_MODEL",
+    },
+    "gonka": {
+        "nome": "Gonka Broker",
+        "custo": "gratuito (phone verification)",
+        "env_chave": ("GONKA_API_KEY",),
+        "base_url": "https://proxy.gonkabroker.com/v1",
+        "modelo": os.environ.get("GONKA_MODEL", "deepseek-ai/DeepSeek-V4-Flash-0731"),
+        "env_modelo": "GONKA_MODEL",
+    },
+    "modelscope": {
+        "nome": "ModelScope",
+        "custo": "gratuito (verificacao real-name)",
+        "env_chave": ("MODELSCOPE_API_KEY",),
+        "base_url": "https://api-inference.modelscope.cn/v1",
+        "modelo": os.environ.get("MODELSCOPE_MODEL", "Qwen/Qwen3.5-35B-A3B"),
+        "env_modelo": "MODELSCOPE_MODEL",
+    },
+    "siliconflow": {
+        "nome": "SiliconFlow",
+        "custo": "gratuito (verificacao de identidade)",
+        "env_chave": ("SILICONFLOW_API_KEY",),
+        "base_url": "https://api.siliconflow.cn/v1",
+        "modelo": os.environ.get("SILICONFLOW_MODEL", "tencent/Hunyuan-MT-7B"),
+        "env_modelo": "SILICONFLOW_MODEL",
+    },
+    "ovh": {
+        "nome": "OVHcloud AI Endpoints",
+        "custo": "gratuito (anonimo, 2 RPM/IP)",
+        "env_chave": (),
+        "base_url": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
+        "modelo": os.environ.get("OVH_MODEL", "Meta-Llama-3_3-70B-Instruct"),
+        "env_modelo": "OVH_MODEL",
+        "nota": "APROVADO em teste real; limite baixo, usar como reserva.",
+    },
+    "cohere": {
+        "nome": "Cohere",
+        "custo": "trial (USO NAO COMERCIAL)",
+        "env_chave": ("COHERE_API_KEY",),
+        "base_url": "https://api.cohere.ai/compatibility/v1",
+        "modelo": os.environ.get("COHERE_MODEL", "command-r-08-2024"),
+        "env_modelo": "COHERE_MODEL",
+        "nota": "EVAR em video monetizado: licenca trial e nao-comercial.",
     },
     "cloudflare": {
         "nome": "Cloudflare Workers AI",
@@ -131,11 +220,13 @@ def listar_provedores() -> List[Dict[str, Any]]:
     saida = []
     for chave in ORDEM_FALLBACK:
         info = PROVIDERS[chave]
-        configurado = (
-            all(_env(n) for n in info["env_chave"])
-            if info["env_chave"]
-            else bool(_env("OLLAMA_URL", "OLLAMA_HOST") or chave == "ollama")
-        )
+        if info["env_chave"]:
+            configurado = all(_env(n) for n in info["env_chave"])
+        elif chave == "ollama":
+            configurado = bool(_env("OLLAMA_URL", "OLLAMA_HOST", "OLLAMA_API_KEY"))
+        else:
+            # kilocode/llm7/ovh funcionam sem chave.
+            configurado = True
         saida.append(
             {
                 "id": chave,
@@ -177,7 +268,9 @@ def _call_openai_compat(
     prompt: str, system: str, model: str, chave: str, temperatura: float, max_tokens: int,
     *, url: str, headers_extra: Optional[Dict[str, str]] = None, json_mode: bool = True,
 ) -> str:
-    headers = {"Authorization": f"Bearer {chave}", "Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json"}
+    if chave:
+        headers["Authorization"] = f"Bearer {chave}"
     headers.update(headers_extra or {})
     payload: Dict[str, Any] = {
         "model": model,
@@ -285,6 +378,19 @@ def _chamar_um(
     """Chama um unico provedor. Devolve (texto, modelo_usado)."""
     info = PROVIDERS[provider]
     modelo = _modelo_padrao(provider, model)
+
+    # Provedores OpenAI-compatible do awesome-free-llm-apis.
+    if info.get("base_url"):
+        chave = api_key or _env(*info["env_chave"], *info.get("env_opcional", ()))
+        if info["env_chave"] and not chave:
+            raise RuntimeError(
+                f"{' / '.join(info['env_chave'])} nao configurada. "
+                f"Pegue em {info.get('url', 'site do provedor')}."
+            )
+        return _call_openai_compat(
+            prompt, system, modelo, chave, temperatura, max_tokens,
+            url=f"{info['base_url'].rstrip('/')}/chat/completions",
+        ), modelo
 
     if provider == "gemini":
         chave = api_key or _env(*info["env_chave"])

@@ -32,6 +32,26 @@ export interface Env {
   OLLAMA_API_KEY?: string; // opcional: Ollama Cloud
   OLLAMA_MODEL?: string;
 
+  // awesome-free-llm-apis
+  KILOCODE_MODEL?: string;
+  LLM7_API_KEY?: string; // opcional
+  LLM7_MODEL?: string;
+  OVH_MODEL?: string;
+  AION_API_KEY?: string;
+  AION_MODEL?: string;
+  AXFORGE_API_KEY?: string;
+  AXFORGE_MODEL?: string;
+  ZAI_API_KEY?: string;
+  ZAI_MODEL?: string;
+  GONKA_API_KEY?: string;
+  GONKA_MODEL?: string;
+  MODELSCOPE_API_KEY?: string;
+  MODELSCOPE_MODEL?: string;
+  SILICONFLOW_API_KEY?: string;
+  SILICONFLOW_MODEL?: string;
+  COHERE_API_KEY?: string;
+  COHERE_MODEL?: string;
+
   SCRIPT_PROVIDER?: string;
   SCRIPT_MODEL?: string;
   ALLOWED_ORIGIN?: string;

@@ -42,6 +42,16 @@ PONTOS: Dict[str, Dict[str, int]] = {
     "openai": {"roteiro": 4, "titulos": 4, "hype": 4, "legendas": 5, "revisao": 5, "reserva": 3},
     "anthropic": {"roteiro": 5, "titulos": 4, "hype": 4, "legendas": 5, "revisao": 5, "reserva": 3},
     "ollama": {"roteiro": 3, "titulos": 3, "hype": 2, "legendas": 3, "revisao": 3, "reserva": 4},
+    "kilocode": {"roteiro": 4, "titulos": 4, "hype": 3, "legendas": 3, "revisao": 4, "reserva": 5},
+    "llm7": {"roteiro": 3, "titulos": 3, "hype": 2, "legendas": 3, "revisao": 3, "reserva": 4},
+    "aionlabs": {"roteiro": 5, "titulos": 4, "hype": 3, "legendas": 4, "revisao": 4, "reserva": 3},
+    "axforge": {"roteiro": 4, "titulos": 3, "hype": 3, "legendas": 3, "revisao": 4, "reserva": 4},
+    "zai": {"roteiro": 4, "titulos": 4, "hype": 3, "legendas": 3, "revisao": 4, "reserva": 4},
+    "gonka": {"roteiro": 4, "titulos": 3, "hype": 3, "legendas": 3, "revisao": 4, "reserva": 3},
+    "modelscope": {"roteiro": 3, "titulos": 3, "hype": 2, "legendas": 3, "revisao": 3, "reserva": 3},
+    "siliconflow": {"roteiro": 3, "titulos": 3, "hype": 2, "legendas": 4, "revisao": 3, "reserva": 3},
+    "ovh": {"roteiro": 3, "titulos": 3, "hype": 2, "legendas": 3, "revisao": 3, "reserva": 5},
+    "cohere": {"roteiro": 3, "titulos": 3, "hype": 3, "legendas": 4, "revisao": 3, "reserva": 2},
 }
 
 # Modelos candidatos por provedor. "servicos" = onde ele e indicado.
@@ -70,6 +80,18 @@ CANDIDATOS: List[Dict[str, Any]] = [
     {"provider": "ollama", "modelo": "llama3.1", "servicos": ["roteiro", "reserva"]},
     {"provider": "ollama", "modelo": "gemma3", "servicos": ["titulos", "legendas"]},
     {"provider": "ollama", "modelo": "qwen2.5", "servicos": ["revisao", "reserva"]},
+    # awesome-free-llm-apis — aprovados em teste real, sem chave.
+    {"provider": "kilocode", "modelo": "kilo-auto/free", "servicos": ["roteiro", "titulos", "reserva"]},
+    {"provider": "llm7", "modelo": "gpt-oss:20b", "servicos": ["roteiro", "reserva"]},
+    {"provider": "ovh", "modelo": "Meta-Llama-3_3-70B-Instruct", "servicos": ["reserva", "revisao"]},
+    # awesome-free-llm-apis — precisam de chave; entram no router quando cadastradas.
+    {"provider": "aionlabs", "modelo": "aion-labs/aion-3.0-mini", "servicos": ["roteiro", "titulos"]},
+    {"provider": "axforge", "modelo": "glm-5.3-flash", "servicos": ["roteiro", "revisao"]},
+    {"provider": "zai", "modelo": "glm-4.7-flash", "servicos": ["titulos", "revisao"]},
+    {"provider": "gonka", "modelo": "deepseek-ai/DeepSeek-V4-Flash-0731", "servicos": ["roteiro", "hype"]},
+    {"provider": "modelscope", "modelo": "Qwen/Qwen3.5-35B-A3B", "servicos": ["legendas", "reserva"]},
+    {"provider": "siliconflow", "modelo": "tencent/Hunyuan-MT-7B", "servicos": ["legendas", "revisao"]},
+    {"provider": "cohere", "modelo": "command-r-08-2024", "servicos": ["legendas"]},
 ]
 
 

@@ -78,6 +78,23 @@ Para pegar a chave da Pixabay: crie conta em `pixabay.com/accounts/`, entre em
 A da Pexels: `pexels.com/api/new/` → preencha o formulário → copie em
 `PEXELS_API_KEY`. Se o site estiver fora, use Openverse/Wikimedia — não travam.
 
+### Provedores extras do awesome-free-llm-apis
+
+Repositório auditado: https://github.com/mnfst/awesome-free-llm-apis
+(`lastUpdated: 2026-11-15`).
+
+Aprovados em teste real, **sem chave**:
+
+| Provider | Modelo aprovado | Base URL | Uso |
+|---|---|---|---|
+| Kilo Code | `kilo-auto/free` | `https://api.kilo.ai/api/gateway` | roteiro/títulos (1º sem chave) |
+| LLM7.io | `gpt-oss:20b` | `https://api.llm7.io/v1` | roteiro/reserva |
+| OVHcloud | `Meta-Llama-3_3-70B-Instruct` | `https://oai.endpoints.kepler.ai.cloud.ovh.net/v1` | reserva (2 RPM/IP) |
+
+Opcionais (entram se a chave existir): Aion Labs (ótimo para storytelling),
+AxForge, Z AI, Gonka, ModelScope, SiliconFlow e Cohere. Cohere é trial
+**não-comercial**: não usar em vídeo monetizado.
+
 ### Teste de modelos e agentes
 
 ```bash
@@ -127,12 +144,15 @@ não sai do computador e não há custo por minuto. Para acelerar: `base`/`tiny`
 
 ## Cloudflare (roteiro remoto)
 
-```bash
-cd cloudflare && npm install && npx wrangler login
-npx wrangler secret put GEMINI_API_KEY
-npx wrangler secret put API_TOKEN
-npx wrangler deploy
-```
+A API roda como **Pages Function** em `functions/api/[[path]].ts`, na mesma origem
+do site (`https://natodark.pages.dev/api/...`). Ela enxerga diretamente os Pages
+Secrets que você já cadastrou (`GEMINI_API_KEY`, `NVIDIA_API_KEY`,
+`OPEN_ROUTER_API_KEY`, `OLLAMA_API_KEY`) — não precisa copiá-los para o Worker.
+`dist/_routes.json` faz a Function só rodar em `/api/*`.
+
+O Worker separado `natodark-studio` (`cd cloudflare && npx wrangler deploy`)
+continua disponível se você quiser a API fora do Pages; nesse caso ele precisa
+dos próprios Secrets via `wrangler secret put`.
 
 Detalhes, R2 opcional e exemplos de `curl` em `cloudflare/README.md`.
 
