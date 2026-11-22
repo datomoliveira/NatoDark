@@ -126,6 +126,11 @@ por pico temporário).
 | reprovado | modelos NVIDIA antigos (410 Gone) e OpenRouter `:free` antigos (virou pago/404) |
 | reprovado | Ollama Cloud (`glm-5.3-flash:cloud` exige créditos; `qwen3.5:cloud` aposentado) |
 
+O OpenRouter `:free` aprovado é **reasoning** e oscila: em um teste devolveu
+`content` vazio porque os 128 tokens foram gastos no "pensamento". O router agora
+aceita `reasoning`/`reasoning_content` como resposta e o health usa 512 tokens;
+mesmo assim, se falhar, o fallback segue para Kilo Code / OVH.
+
 Defaults do router já foram trocados para os aprovados. Ollama local continua
 disponível se você definir `OLLAMA_URL`; a chave `OLLAMA_API_KEY` aponta para a
 nuvem, que hoje não tem créditos nesta conta.

@@ -300,7 +300,10 @@ async function chatarCompat(
   const dados = await jsonDaResposta(r, "chat/completions");
   const escolhas = dados.choices as any[] | undefined;
   if (!escolhas?.length) throw new Error("Resposta sem choices.");
-  return String(escolhas[0]?.message?.content ?? "");
+  const msg = escolhas[0]?.message ?? {};
+  // Modelos reasoning (ex.: Nemotron :free) as vezes deixam `content` vazio e
+  // devolvem o texto em `reasoning`/`reasoning_content`.
+  return String(msg.content || msg.reasoning || msg.reasoning_content || "");
 }
 
 async function chamarGemini(env: Env, chave: string, c: Chamada): Promise<string> {
@@ -568,7 +571,9 @@ export async function testarModelo(
         system: "Voce e um agente de teste. Responda sempre JSON valido.",
         modelo,
         temperatura: 0,
-        maxTokens: 128,
+        // 128 tokens podem ser consumidos só pelo "pensamento" de modelos
+        // reasoning, deixando content vazio. 512 evita falso negativo.
+        maxTokens: 512,
       });
       if (!resposta.texto.trim()) throw new Error("resposta vazia");
       if (!resposta.texto.includes("{") || !resposta.texto.includes("}")) {

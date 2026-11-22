@@ -296,7 +296,9 @@ def _call_openai_compat(
     escolhas = dados.get("choices") or []
     if not escolhas:
         raise RuntimeError("Resposta sem choices.")
-    return ((escolhas[0].get("message") or {}).get("content") or "")
+    msg = escolhas[0].get("message") or {}
+    # Modelos reasoning as vezes devolvem o texto em reasoning/reasoning_content.
+    return msg.get("content") or msg.get("reasoning") or msg.get("reasoning_content") or ""
 
 
 def _call_anthropic(prompt: str, system: str, model: str, chave: str, temperatura: float, max_tokens: int) -> str:
@@ -591,7 +593,8 @@ def testar_modelo(
                 provider=provider,
                 model=modelo,
                 temperatura=0,
-                max_tokens=128,
+                # 128 tokens podem ser gastos so no "pensamento" de modelos reasoning.
+                max_tokens=512,
                 fallback=False,
             )
             texto = (resposta.get("texto") or "").strip()
