@@ -4,6 +4,7 @@ import type { Env } from "./types";
 
 export type ProviderId =
   | "gemini"
+  | "nvidia"
   | "groq"
   | "openrouter"
   | "cloudflare"
@@ -13,6 +14,7 @@ export type ProviderId =
 
 export const ORDEM_FALLBACK: ProviderId[] = [
   "gemini",
+  "nvidia",
   "groq",
   "openrouter",
   "cloudflare",
@@ -47,6 +49,14 @@ export const PROVIDERS: Record<ProviderId, Meta> = {
     modeloPadrao: "gemini-3.8-flash",
     configurado: (e) => !!primeiroEnv(e, ["GEMINI_API_KEY", "GOOGLE_API_KEY"]),
   },
+  nvidia: {
+    nome: "NVIDIA NIM",
+    custo: "gratuito (endpoints free)",
+    envChave: ["NVIDIA_API_KEY"],
+    envModelo: "NVIDIA_MODEL",
+    modeloPadrao: "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+    configurado: (e) => !!primeiroEnv(e, ["NVIDIA_API_KEY"]),
+  },
   groq: {
     nome: "Groq",
     custo: "gratuito",
@@ -58,7 +68,7 @@ export const PROVIDERS: Record<ProviderId, Meta> = {
   openrouter: {
     nome: "OpenRouter",
     custo: "gratuito (modelos :free)",
-    envChave: ["OPENROUTER_API_KEY"],
+    envChave: ["OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY"],
     envModelo: "OPENROUTER_MODEL",
     modeloPadrao: "meta-llama/llama-3.3-70b-instruct:free",
     configurado: (e) => !!primeiroEnv(e, ["OPENROUTER_API_KEY"]),
@@ -92,11 +102,11 @@ export const PROVIDERS: Record<ProviderId, Meta> = {
   ollama: {
     nome: "Ollama (local)",
     custo: "gratuito / local",
-    envChave: [],
+    envChave: [], // OLLAMA_API_KEY e opcional (Ollama Cloud)
     envModelo: "OLLAMA_MODEL",
     modeloPadrao: "llama3.1",
-    // No Worker nao ha Ollama; so e util no backend local.
-    configurado: (e) => !!primeiroEnv(e, ["OLLAMA_URL", "OLLAMA_HOST"]),
+    // No Worker nao ha Ollama local; so faz sentido com URL/chave de Ollama Cloud.
+    configurado: (e) => !!primeiroEnv(e, ["OLLAMA_URL", "OLLAMA_HOST", "OLLAMA_API_KEY"]),
   },
 };
 
@@ -120,6 +130,8 @@ export function segredo(env: Env, mensagem: string): string {
       if (valor.length > 6) texto = texto.split(valor).join("***");
     }
   }
+  const chaveOllama = primeiroEnv(env, ["OLLAMA_API_KEY"]);
+  if (chaveOllama.length > 6) texto = texto.split(chaveOllama).join("***");
   return texto;
 }
 
@@ -255,10 +267,15 @@ async function chamarAnthropic(chave: string, c: Chamada): Promise<string> {
 }
 
 async function chamarOllama(env: Env, c: Chamada): Promise<string> {
-  const base = primeiroEnv(env, ["OLLAMA_URL", "OLLAMA_HOST"]) || "http://127.0.0.1:11434";
+  const chave = primeiroEnv(env, ["OLLAMA_API_KEY"]);
+  const base =
+    primeiroEnv(env, ["OLLAMA_URL", "OLLAMA_HOST"]) ||
+    (chave ? "https://ollama.com" : "http://127.0.0.1:11434");
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (chave) headers.Authorization = `Bearer ${chave}`;
   const r = await fetch(`${base.replace(/\/$/, "")}/api/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({
       model: c.modelo,
       stream: false,
@@ -288,6 +305,19 @@ export async function chamarProvider(
       const chave = primeiroEnv(env, meta.envChave);
       if (!chave) throw new Error("GEMINI_API_KEY nao configurada.");
       return { texto: await chamarGemini(env, chave, chamada), modelo };
+    }
+    case "nvidia": {
+      const chave = primeiroEnv(env, meta.envChave);
+      if (!chave) throw new Error("NVIDIA_API_KEY nao configurada.");
+      return {
+        texto: await chatarCompat(
+          "https://integrate.api.nvidia.com/v1/chat/completions",
+          chave,
+          {},
+          chamada,
+        ),
+        modelo,
+      };
     }
     case "groq": {
       const chave = primeiroEnv(env, meta.envChave);
@@ -363,4 +393,69 @@ export async function gerarComFallback(
 
   const detalhe = tentativas.slice(-3).map((t) => `${t.provedor}: ${t.erro}`).join("; ");
   throw new Error(`Nenhum provedor conseguiu gerar o texto. ${detalhe}`);
+}
+
+// Nomes de zueira por servico — o mesmo padrao usado no backend Python.
+const AGENTES: Record<string, string> = {
+  roteiro: "Dr. Gancho da Silva Corte Seco",
+  titulos: "Capitao Clickbait Pereira",
+  hype: "Dona Curiosidade AlmeidaTrend",
+  legendas: "Zé Legendinha Santos",
+  revisao: "Prof. Pattern Interrupt Gomes",
+  reserva: "Tio fallback Ribeiro",
+};
+
+export function nomeAgente(servico = "reserva"): string {
+  return AGENTES[servico] || AGENTES.reserva;
+}
+
+export async function testarModelo(
+  env: Env,
+  id: ProviderId,
+  modelo: string,
+  servico = "roteiro",
+  tentativas?: number,
+): Promise<Record<string, unknown>> {
+  const permitidas = Math.max(1, Math.min(tentativas ?? (id === "ollama" ? 3 : 2), 5));
+  const erros: string[] = [];
+  const inicio = Date.now();
+  for (let n = 1; n <= permitidas; n++) {
+    try {
+      const resposta = await chamarProvider(env, id, {
+        prompt: 'Responda SOMENTE com JSON valido: {"ok": true, "servico": "teste"}.',
+        system: "Voce e um agente de teste. Responda sempre JSON valido.",
+        modelo,
+        temperatura: 0,
+        maxTokens: 128,
+      });
+      if (!resposta.texto.trim()) throw new Error("resposta vazia");
+      if (!resposta.texto.includes("{") || !resposta.texto.includes("}")) {
+        throw new Error("resposta nao e JSON valido");
+      }
+      return {
+        provider: id,
+        modelo: resposta.modelo,
+        agente: nomeAgente(servico),
+        servico,
+        status: "aprovado",
+        tentativas_realizadas: n,
+        tentativas_permitidas: permitidas,
+        latencia_ms: Date.now() - inicio,
+        erro: "",
+      };
+    } catch (err) {
+      erros.push(segredo(env, String(err)));
+    }
+  }
+  return {
+    provider: id,
+    modelo,
+    agente: nomeAgente(servico),
+    servico,
+    status: "reprovado",
+    tentativas_realizadas: permitidas,
+    tentativas_permitidas: permitidas,
+    latencia_ms: Date.now() - inicio,
+    erro: erros.join(" | ").slice(0, 400),
+  };
 }

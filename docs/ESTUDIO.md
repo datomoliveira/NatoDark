@@ -47,8 +47,10 @@ Secrets da Cloudflare (`wrangler secret put NOME`).
 | Chave | Prioridade | Função | Onde conseguir |
 |---|---|---|---|
 | `GEMINI_API_KEY` | **Configure esta primeiro** — gratuita, sem cartão | roteiro e queries de mídia | https://aistudio.google.com/apikey |
-| `GROQ_API_KEY` | Gratuita — entra no fallback | roteiro | https://console.groq.com/keys |
-| `OPENROUTER_API_KEY` | Gratuita com modelos `:free` | fallback | https://openrouter.ai/keys |
+| `NVIDIA_API_KEY` | Gratuita (NVIDIA NIM) | roteiro longo, revisão e reserva | https://build.nvidia.com/ |
+| `GROQ_API_KEY` | Gratuita — entra no fallback | títulos e roteiro rápido | https://console.groq.com/keys |
+| `OPENROUTER_API_KEY` **ou** `OPEN_ROUTER_API_KEY` | Gratuita com modelos `:free` | fallback | https://openrouter.ai/keys |
+| `OLLAMA_API_KEY` (opcional) | Gratuito/local | modelos locais ou Ollama Cloud | https://ollama.com/ |
 | `CF_ACCOUNT_ID` + `CF_API_TOKEN` | Gratuito | Workers AI (fallback) e deploy | painel Cloudflare; token com `Workers AI - Edit` |
 | `PEXELS_API_KEY` | Gratuita — melhora muito a mídia | busca de stock | https://www.pexels.com/api/ |
 | `PIXABAY_API_KEY` | Gratuita | segundo fallback de stock | https://pixabay.com/api/docs/ |
@@ -58,8 +60,38 @@ Secrets da Cloudflare (`wrangler secret put NOME`).
 | `HF_TOKEN` | Opcional | só cota/velocidade no download do Whisper | huggingface.co |
 
 Sem **nenhuma** chave de IA, o router ainda tenta `ollama` local
-(`OLLAMA_URL`, `OLLAMA_MODEL`). Sem chaves de stock, o sistema usa Wikimedia
-Commons e slides locais com `credits.json`.
+(`OLLAMA_URL`, `OLLAMA_MODEL`). Sem chaves de stock, o sistema usa
+**Openverse → Wikimedia Commons** e slides locais com `credits.json`.
+
+### Bancos de imagem/vídeo gratuitos — links exatos
+
+| Banco | Link da API / cadastro | Chave? | Uso aqui |
+|---|---|---|---|
+| Pexels | API: https://www.pexels.com/api/ · cadastro: https://www.pexels.com/api/new/ | Sim, gratuita | vídeos e fotos (1º da fila) |
+| Pixabay | Docs: https://pixabay.com/api/docs/ · conta: https://pixabay.com/accounts/ | Sim, gratuita | vídeos e fotos (2º da fila) |
+| Openverse | API: https://api.openverse.org/v1/images/ · busca: https://openverse.org/ | **Não** | fotos CC/public domain (3º da fila) |
+| Wikimedia Commons | API: https://commons.wikimedia.org/w/api.php | **Não** | fotos e vídeos (4º da fila) |
+| Unsplash | https://unsplash.com/developers | Sim, gratuita | referência/fotos (não integrada ao auto-scout) |
+
+Para pegar a chave da Pixabay: crie conta em `pixabay.com/accounts/`, entre em
+**Account settings → API**, copie a chave e cole em `PIXABAY_API_KEY`.
+A da Pexels: `pexels.com/api/new/` → preencha o formulário → copie em
+`PEXELS_API_KEY`. Se o site estiver fora, use Openverse/Wikimedia — não travam.
+
+### Teste de modelos e agentes
+
+```bash
+curl -s http://localhost:8000/api/models/agents
+curl -s -X POST http://localhost:8000/api/models/health \
+  -H 'Content-Type: application/json' \
+  -d '{"testar_todos": true}'
+```
+
+Cada modelo aprovado recebe um agente com nome e sobrenome por função:
+Dr. Gancho da Silva Corte Seco (roteiro), Capitão Clickbait Pereira (títulos),
+Dona Curiosidade AlmeidaTrend (hype), Zé Legendinha Santos (legendas),
+Prof. Pattern Interrupt Gomes (revisão) e Tio fallback Ribeiro (reserva).
+Ollama só é reprovado após **3 tentativas**; os demais, após 2.
 
 ### Por que a API do YouTube é opcional
 
@@ -79,7 +111,8 @@ Commons e slides locais com `credits.json`.
    distribuída, pattern interrupt, cliffhanger, loop e CTA. Regras de âncora e
    título incluídas no prompt.
 3. **Buscar e aplicar mídia** → uma cena por bloco, Pexels → Pixabay →
-   Wikimedia, com créditos em `credits.json`. **Nunca** usa clipes do YouTube.
+   Openverse → Wikimedia, com créditos em `credits.json`. **Nunca** usa clipes
+   do YouTube.
 4. **Enviar sua voz** na aba de áudio → **Sincronizar com minha voz**: o
    faster-whisper gera SRT com timestamps reais, alinha os blocos e grava
    `subtitle_style.srt_key`. O compiler prefere esse SRT ao estimado por

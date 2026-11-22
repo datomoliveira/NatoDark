@@ -8,12 +8,16 @@ variaveis sao os Secrets do Worker (mesmo nome, sem precisar mudar codigo).
 Provedores suportados (todos com saida forcada em JSON):
 
   gemini       Google Gemini  — tier gratuito  — GEMINI_API_KEY / GOOGLE_API_KEY
+  nvidia       NVIDIA NIM     — tier gratuito  — NVIDIA_API_KEY
   groq         Groq           — tier gratuito  — GROQ_API_KEY
-  openrouter   OpenRouter     — modelos :free  — OPENROUTER_API_KEY
+  openrouter   OpenRouter     — modelos :free  — OPENROUTER_API_KEY / OPEN_ROUTER_API_KEY
   cloudflare   Workers AI     — tier gratuito  — CF_ACCOUNT_ID + CF_API_TOKEN
   openai       OpenAI         — pago barato    — OPENAI_API_KEY
   anthropic    Anthropic      — pago opcional  — ANTHROPIC_API_KEY
-  ollama       Ollama local   — gratuito/local — sem chave (OLLAMA_URL)
+  ollama       Ollama local   — gratuito/local — sem chave (OLLAMA_URL / OLLAMA_API_KEY)
+
+Aliases aceitos: OPEN_ROUTER_API_KEY = OPENROUTER_API_KEY,
+OLLAMA_API_KEY = chave opcional para Ollama Cloud (https://ollama.com).
 
 Uso:
 
@@ -28,12 +32,16 @@ para os demais (desative com fallback=False).
 
 import json
 import os
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
 TIMEOUT = (10, 60)
-ORDEM_FALLBACK = ("gemini", "groq", "openrouter", "cloudflare", "openai", "anthropic", "ollama")
+ORDEM_FALLBACK = (
+    "gemini", "nvidia", "groq", "openrouter", "cloudflare",
+    "openai", "anthropic", "ollama",
+)
 
 
 PROVIDERS: Dict[str, Dict[str, Any]] = {
@@ -42,8 +50,15 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
         "custo": "gratuito",
         "env_chave": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
         "modelo": os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
-        "modelo_leve": os.environ.get("GEMINI_LITE_MODEL", "gemini-3.5-flash-lite"),
+        "modelo_leve": os.environ.get("GEMINI_LITE_MODEL", "gemini-2.5-flash-lite"),
         "env_modelo": "GEMINI_MODEL",
+    },
+    "nvidia": {
+        "nome": "NVIDIA NIM",
+        "custo": "gratuito (endpoints free)",
+        "env_chave": ("NVIDIA_API_KEY",),
+        "modelo": os.environ.get("NVIDIA_MODEL", "nvidia/llama-3.3-nemotron-super-49b-v1.5"),
+        "env_modelo": "NVIDIA_MODEL",
     },
     "groq": {
         "nome": "Groq",
@@ -55,7 +70,7 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
     "openrouter": {
         "nome": "OpenRouter",
         "custo": "gratuito (modelos :free)",
-        "env_chave": ("OPENROUTER_API_KEY",),
+        "env_chave": ("OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY"),
         "modelo": os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"),
         "env_modelo": "OPENROUTER_MODEL",
     },
@@ -81,9 +96,11 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
         "env_modelo": "ANTHROPIC_MODEL",
     },
     "ollama": {
-        "nome": "Ollama (local)",
+        "nome": "Ollama (local ou cloud)",
         "custo": "gratuito / local",
         "env_chave": (),
+        # Chave opcional: so e usada se OLLAMA_URL apontar para Ollama Cloud.
+        "env_opcional": ("OLLAMA_API_KEY",),
         "modelo": os.environ.get("OLLAMA_MODEL", "llama3.1"),
         "env_modelo": "OLLAMA_MODEL",
     },
@@ -102,7 +119,7 @@ def _seguro(mensagem: str) -> str:
     """Corta a mensagem e remove qualquer chave que apareca nela."""
     texto = str(mensagem)[:300]
     for info in PROVIDERS.values():
-        for nome in info["env_chave"]:
+        for nome in (*info["env_chave"], *info.get("env_opcional", ())):
             valor = os.environ.get(nome)
             if valor and len(valor) > 6:
                 texto = texto.replace(valor, "***")
@@ -127,6 +144,7 @@ def listar_provedores() -> List[Dict[str, Any]]:
                 "modelo": info["modelo"],
                 "env_modelo": info["env_modelo"],
                 "env_chave": list(info["env_chave"]),
+                "env_opcional": list(info.get("env_opcional", ())),
                 "configurado": configurado,
             }
         )
@@ -235,9 +253,17 @@ def _call_cloudflare(
 
 
 def _call_ollama(prompt: str, system: str, model: str, temperatura: float, max_tokens: int) -> str:
-    url = _env("OLLAMA_URL", "OLLAMA_HOST") or "http://127.0.0.1:11434"
+    chave = _env("OLLAMA_API_KEY")
+    # Sem URL definida, a presenca de chave indica Ollama Cloud.
+    url = _env("OLLAMA_URL", "OLLAMA_HOST") or (
+        "https://ollama.com" if chave else "http://127.0.0.1:11434"
+    )
+    headers = {"Content-Type": "application/json"}
+    if chave:
+        headers["Authorization"] = f"Bearer {chave}"
     r = requests.post(
         f"{url.rstrip('/')}/api/chat",
+        headers=headers,
         json={
             "model": model,
             "stream": False,
@@ -265,6 +291,15 @@ def _chamar_um(
         if not chave:
             raise RuntimeError("GEMINI_API_KEY nao configurada (tire uma chave gratuita em https://aistudio.google.com/apikey).")
         return _call_gemini(prompt, system, modelo, chave, temperatura, max_tokens), modelo
+
+    if provider == "nvidia":
+        chave = api_key or _env(*info["env_chave"])
+        if not chave:
+            raise RuntimeError("NVIDIA_API_KEY nao configurada (https://build.nvidia.com).")
+        return _call_openai_compat(
+            prompt, system, modelo, chave, temperatura, max_tokens,
+            url="https://integrate.api.nvidia.com/v1/chat/completions",
+        ), modelo
 
     if provider == "groq":
         chave = api_key or _env(*info["env_chave"])
@@ -378,3 +413,143 @@ def chamar_modelo(
 
     detalhe = "; ".join(f"{t['provedor']}: {t['erro']}" for t in tentativas[-3:])
     raise RuntimeError(f"Nenhum provedor conseguiu gerar o texto. {detalhe}")
+
+
+# ---------------------------------------------------------------------------
+# Saude dos modelos / agentes
+# ---------------------------------------------------------------------------
+
+PROMPT_TESTE = (
+    "Responda SOMENTE com JSON valido no formato "
+    '{"ok": true, "servico": "teste"}. Nao escreva nada fora do JSON.'
+)
+SYSTEM_TESTE = "Voce e um agente de teste. Responda sempre JSON valido."
+
+
+def _json_valido(texto: str) -> bool:
+    """Aceita JSON puro ou JSON cercado por ```/texto."""
+    if not texto or not texto.strip():
+        return False
+    limpo = texto.strip()
+    if limpo.startswith("```"):
+        limpo = limpo.strip("`")
+        limpo = limpo.replace("json", "", 1).strip()
+    inicio, fim = limpo.find("{"), limpo.rfind("}")
+    if inicio < 0 or fim <= inicio:
+        return False
+    try:
+        dados = json.loads(limpo[inicio : fim + 1])
+    except Exception:
+        return False
+    return isinstance(dados, dict) and bool(dados)
+
+
+def testar_modelo(
+    provider: str,
+    modelo: str,
+    *,
+    tentativas: Optional[int] = None,
+    servico: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Testa um modelo de verdade antes de aprovar.
+
+    - Ollama: 3 tentativas antes de reprovar (exigencia do usuario).
+    - Demais: 2 tentativas (evita reprovar por falha transitoria).
+    - Usa fallback=False: se o modelo falhar, NAO disfarca com outro.
+    """
+    from model_agents import nome_agente
+
+    provider = (provider or "").strip().lower()
+    if provider not in PROVIDERS:
+        raise ValueError(f"Provedor invalido: {provider}")
+
+    if tentativas is None:
+        tentativas = 3 if provider == "ollama" else 2
+    tentativas = max(1, min(int(tentativas), 5))
+
+    servico = servico or "roteiro"
+    agente = nome_agente(provider, servico)
+    erros: List[str] = []
+    amostra = ""
+    inicio = time.monotonic()
+
+    for numero in range(1, tentativas + 1):
+        try:
+            resposta = chamar_modelo(
+                PROMPT_TESTE,
+                system=SYSTEM_TESTE,
+                provider=provider,
+                model=modelo,
+                temperatura=0,
+                max_tokens=128,
+                fallback=False,
+            )
+            texto = (resposta.get("texto") or "").strip()
+            if not texto:
+                raise RuntimeError("resposta vazia")
+            if not _json_valido(texto):
+                raise RuntimeError("resposta nao e JSON valido")
+            return {
+                "provider": provider,
+                "modelo": resposta.get("modelo") or modelo,
+                "agente": agente,
+                "servico": servico,
+                "status": "aprovado",
+                "tentativas_realizadas": numero,
+                "tentativas_permitidas": tentativas,
+                "latencia_ms": int((time.monotonic() - inicio) * 1000),
+                "erro": "",
+                "amostra": texto[:160],
+            }
+        except Exception as err:
+            erros.append(_seguro(err))
+
+    return {
+        "provider": provider,
+        "modelo": modelo,
+        "agente": agente,
+        "servico": servico,
+        "status": "reprovado",
+        "tentativas_realizadas": tentativas,
+        "tentativas_permitidas": tentativas,
+        "latencia_ms": int((time.monotonic() - inicio) * 1000),
+        "erro": " | ".join(erros)[:400],
+        "amostra": amostra,
+    }
+
+
+def testar_candidatos(
+    *,
+    provider: Optional[str] = None,
+    so_configurados: bool = True,
+    servico: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Testa todos os candidatos conhecidos e separa aprovados/reprovados."""
+    from model_agents import candidatos_provider
+
+    configurados = {p["id"] for p in listar_provedores() if p["configurado"]}
+    resultados: List[Dict[str, Any]] = []
+    for item in candidatos_provider(provider):
+        if so_configurados and item["provider"] not in configurados:
+            resultados.append({
+                "provider": item["provider"],
+                "modelo": item["modelo"],
+                "agente": item["agente"],
+                "servico": servico or item["servicos"][0],
+                "status": "nao_testado",
+                "motivo": "sem chave/configuracao",
+            })
+            continue
+        resultados.append(testar_modelo(
+            item["provider"], item["modelo"], servico=servico or item["servicos"][0],
+        ))
+
+    aprovados = [r for r in resultados if r.get("status") == "aprovado"]
+    reprovados = [r for r in resultados if r.get("status") == "reprovado"]
+    return {
+        "total_testados": len(aprovados) + len(reprovados),
+        "aprovados": aprovados,
+        "reprovados": reprovados,
+        "nao_testados": [r for r in resultados if r.get("status") == "nao_testado"],
+    }

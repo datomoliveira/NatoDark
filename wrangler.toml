@@ -1,0 +1,10 @@
+# Configuracao do projeto Cloudflare Pages "natodark" (natodark.pages.dev).
+# Arquivo na raiz = source of truth para o Pages (V2 build system).
+# A API de roteiro roda como Worker separado em cloudflare/wrangler.toml.
+name = "natodark"
+pages_build_output_dir = "./dist"
+compatibility_date = "2026-11-22"
+compatibility_flags = [ "nodejs_compat" ]
+
+[vars]
+SCRIPT_PROVIDER = "auto"

@@ -271,6 +271,44 @@ def _buscar_wikimedia(query: str, tipo: str) -> Optional[Dict[str, str]]:
         return None
 
 
+def _buscar_openverse(query: str, tipo: str) -> Optional[Dict[str, str]]:
+    """
+    Openverse (WordPress) — imagens CC/public domain, SEM chave e sem cota.
+    API: https://api.openverse.org/v1/images/  (nao tem video; so imagem/audio).
+    """
+    if tipo != "image":
+        return None
+    try:
+        r = requests.get(
+            "https://api.openverse.org/v1/images/",
+            headers=HEADERS,
+            params={
+                "q": query,
+                "page_size": 10,
+                "license": "cc0,pdm,by,by-sa",
+                "mature": "false",
+            },
+            timeout=TIMEOUT,
+        )
+        if r.status_code != 200:
+            return None
+        for item in ((r.json() or {}).get("results") or []):
+            url = item.get("url") or item.get("thumbnail")
+            if not url:
+                continue
+            return {
+                "url": url,
+                "pagina": item.get("foreign_landing_url") or item.get("source") or "",
+                "autor": _limpar_texto(item.get("creator") or "Autor na Openverse"),
+                "licenca": (item.get("license") or "Ver pagina (Openverse)").upper(),
+                "fonte": "Openverse",
+            }
+        return None
+    except Exception as err:
+        print(f"[MediaScout] Openverse falhou: {err}")
+        return None
+
+
 def _extensao(url: str, tipo: str) -> str:
     caminho = url.split("?")[0].split("#")[0].lower()
     for ext in (".mp4", ".webm", ".mov", ".m4v", ".jpg", ".jpeg", ".png", ".webp"):
@@ -343,10 +381,13 @@ def build_auto_timeline(
     Busca midia para cada bloco e SUBSTITUI a timeline do projeto.
     Devolve relatorio com creditos de atribuicao.
     """
-    fontes = fontes or ["pexels", "pixabay", "wikimedia"]
-    fontes = [f.lower() for f in fontes if f.lower() in ("pexels", "pixabay", "wikimedia")]
+    fontes = fontes or ["pexels", "pixabay", "openverse", "wikimedia"]
+    fontes = [
+        f.lower() for f in fontes
+        if f.lower() in ("pexels", "pixabay", "openverse", "wikimedia")
+    ]
     if not fontes:
-        fontes = ["wikimedia"]
+        fontes = ["openverse", "wikimedia"]
 
     blocos = _blocos_do_roteiro(roteiro_json, script_texto)[: max(1, max_blocos)]
     if not blocos:
@@ -395,6 +436,8 @@ def build_auto_timeline(
                 if not chave:
                     continue
                 encontrado = _buscar_pixabay(query, tipo, chave)
+            elif fonte == "openverse":
+                encontrado = _buscar_openverse(query, tipo)
             else:
                 encontrado = _buscar_wikimedia(query, tipo)
 

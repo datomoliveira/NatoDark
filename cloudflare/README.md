@@ -10,7 +10,7 @@ e sem expor chave na API.
 |---|---|---|
 | Gerar roteiro (router multi-provider) | **Worker** ✅ | É só uma chamada HTTP ao modelo; cabe tranquilo no Workers |
 | Escolher queries de mídia por bloco | Worker / backend ✅ | Também é só texto |
-| Buscar stock (Pexels/Pixabay/Wikimedia) | backend local ✅ | Precisa das chaves de stock e storage |
+| Buscar stock (Pexels/Pixabay/Openverse/Wikimedia) | backend local ✅ | Precisa das chaves de stock e storage |
 | Cortar/compilar com ffmpeg | **local / VPS** ❌ no Worker | Workers têm 10 ms de CPU no plano free, 128 MB de memória e nenhum binário ffmpeg |
 
 Ou seja: você adiantar o **roteiro remoto**; a renderização pesada continua no
@@ -34,8 +34,11 @@ Rode um comando por chave que você quer usar. O nome é o **mesmo** do
 npx wrangler secret put GEMINI_API_KEY        # https://aistudio.google.com/apikey
 
 # Outros gratuitos (opcionais, entram no fallback):
+npx wrangler secret put NVIDIA_API_KEY        # https://build.nvidia.com/
 npx wrangler secret put GROQ_API_KEY          # https://console.groq.com/keys
 npx wrangler secret put OPENROUTER_API_KEY    # https://openrouter.ai/keys
+# Se você cadastrou como OPEN_ROUTER_API_KEY, use esse nome — o router aceita os dois.
+npx wrangler secret put OLLAMA_API_KEY        # opcional: Ollama Cloud (https://ollama.com)
 npx wrangler secret put CF_ACCOUNT_ID
 npx wrangler secret put CF_API_TOKEN          # permissão "Workers AI - Edit"
 
@@ -51,8 +54,31 @@ O Worker usa `SCRIPT_PROVIDER=auto` (definido em `wrangler.toml`) e tenta,
 nesta ordem, o primeiro que responder:
 
 ```
-gemini -> groq -> openrouter -> cloudflare -> openai -> anthropic -> ollama
+gemini -> nvidia -> groq -> openrouter -> cloudflare -> openai -> anthropic -> ollama
 ```
+
+### Pages x Worker (importante)
+
+O site (`natodark.pages.dev`) é **Cloudflare Pages** e o build roda na raiz do
+repo (`npm run build` → `frontend/out` copiado para `dist/`; veja `wrangler.toml`
+da raiz). A API é um **Worker separado** (`natodark-studio`, config em
+`cloudflare/wrangler.toml`). Pages não aceita `main` de Worker.
+
+As chaves precisam estar como **Secret do Worker** (`wrangler secret put ...`),
+não como variável do Pages. A Cloudflare **nunca devolve o valor de um Secret**
+pela API — só lista o nome. Por isso, se você cadastrou as chaves no Pages,
+elas não aparecem na listagem e o Worker não as enxerga: refaça como Secret do
+Worker com os comandos acima.
+
+Depois de configurar, teste antes de aprovar:
+
+```bash
+curl -s https://<seu-worker>/api/models/health \
+  -H 'Content-Type: application/json' \
+  -d '{"testar_todos": true}'
+```
+
+Ollama é testado 3 vezes antes de ser reprovado; os demais, 2 vezes.
 
 Para fixar um provedor/modelo sem mexer no código:
 

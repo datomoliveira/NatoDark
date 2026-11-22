@@ -5,10 +5,14 @@ export interface Env {
   GOOGLE_API_KEY?: string;
   GEMINI_MODEL?: string;
 
+  NVIDIA_API_KEY?: string;
+  NVIDIA_MODEL?: string;
+
   GROQ_API_KEY?: string;
   GROQ_MODEL?: string;
 
   OPENROUTER_API_KEY?: string;
+  OPEN_ROUTER_API_KEY?: string; // alias aceito
   OPENROUTER_MODEL?: string;
 
   CF_ACCOUNT_ID?: string;
@@ -24,6 +28,8 @@ export interface Env {
   ANTHROPIC_MODEL?: string;
 
   OLLAMA_URL?: string;
+  OLLAMA_HOST?: string;
+  OLLAMA_API_KEY?: string; // opcional: Ollama Cloud
   OLLAMA_MODEL?: string;
 
   SCRIPT_PROVIDER?: string;

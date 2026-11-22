@@ -6,10 +6,13 @@
 // renderizar localmente. Veja README.md.
 import type { Env } from "./types";
 import {
+  ORDEM_FALLBACK,
   PROVIDERS,
   gerarComFallback,
   listarProviders,
+  nomeAgente,
   segredo,
+  testarModelo,
   type ProviderId,
 } from "./providers";
 import { SYSTEM_PROMPT, montarPrompt, extrairJson, normalizar } from "./prompt";
@@ -155,6 +158,57 @@ export default {
           { padrao: env.SCRIPT_PROVIDER || "auto", provedores: listarProviders(env) },
           env,
         );
+      }
+
+      if (path === "/api/models/agents" && request.method === "GET") {
+        const servicos: Record<string, string> = {
+          roteiro: "Hook, curiosidade, pattern interrupt, cliffhanger, loop e CTA.",
+          titulos: "Titulos e ganchos de alta retencao.",
+          hype: "Tendencias, comentarios e angulos virais.",
+          legendas: "Falas ajustadas para legenda em pt-BR.",
+          revisao: "Ritmo, cortes e correcao do texto.",
+          reserva: "Fallback quando o titular falha.",
+        };
+        return json({
+          agentes: Object.entries(servicos).map(([servico, descricao]) => ({
+            servico,
+            descricao,
+            agente: nomeAgente(servico),
+          })),
+        }, env);
+      }
+
+      if (path === "/api/models/health" && request.method === "POST") {
+        let body: Record<string, any> = {};
+        try {
+          body = (await request.json()) as Record<string, any>;
+        } catch {
+          return json({ erro: "Body JSON invalido." }, env, 400);
+        }
+        const servico = String(body.servico ?? "roteiro");
+        const tentativas = body.tentativas ? Number(body.tentativas) : undefined;
+        const resultados: Array<Record<string, unknown>> = [];
+
+        if (body.testar_todos) {
+          const lista = listarProviders(env);
+          for (const id of ORDEM_FALLBACK) {
+            const item = lista.find((p) => p.id === id);
+            if (!item?.configurado) continue;
+            resultados.push(await testarModelo(env, id, item.modelo, servico, tentativas));
+          }
+        } else {
+          const id = String(body.provider ?? "").trim().toLowerCase() as ProviderId;
+          const modelo = String(body.modelo ?? "").trim();
+          if (!(id in PROVIDERS) || !modelo) {
+            return json({ erro: "Informe provider e modelo validos, ou use testar_todos." }, env, 400);
+          }
+          resultados.push(await testarModelo(env, id, modelo, servico, tentativas));
+        }
+
+        return json({
+          aprovados: resultados.filter((r) => r.status === "aprovado"),
+          reprovados: resultados.filter((r) => r.status === "reprovado"),
+        }, env);
       }
 
       if (path === "/api/scripts/generate" && request.method === "POST") {

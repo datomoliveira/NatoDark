@@ -30,8 +30,9 @@ import {
   TrendingUp
 } from "lucide-react";
 
-// API Base configuration
-const API_BASE = "http://localhost:8000";
+// API Base: local por padrao; em producao defina NEXT_PUBLIC_API_BASE
+// no build do Cloudflare Pages com a URL do Worker (sem barra final).
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000").replace(/\/$/, "");
 
 export default function NatoDarkStudio() {
   // Navigation tabs: 'projects' | 'batch' | 'cutter'

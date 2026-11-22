@@ -11,6 +11,9 @@ cloudflare/node_modules/
 cloudflare/.dev.vars
 cloudflare/.wrangler/
 
+# Cloudflare Pages build output
+dist/
+
 # Frontend
 frontend/node_modules/
 frontend/.next/

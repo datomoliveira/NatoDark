@@ -32,6 +32,8 @@ from compiler import (
     log_compile, get_compile_logs
 )
 from script_generator import generate_script, listar_provedores
+import llm_router
+from model_agents import listar_agentes, nome_agente
 from media_scout import build_auto_timeline
 from transcriber import sincronizar_projeto
 from hype_research import pesquisar_hype
@@ -226,7 +228,7 @@ class ScriptGenerateRequest(BaseModel):
 
 class AutoMediaRequest(BaseModel):
     tema: Optional[str] = None
-    fontes: List[str] = ["pexels", "pixabay", "wikimedia"]
+    fontes: List[str] = ["pexels", "pixabay", "openverse", "wikimedia"]
     usar_gemini: bool = True
     max_blocos: int = 12
 
@@ -258,6 +260,13 @@ class BatchCreate(BaseModel):
 
 class AnalyzeUrlRequest(BaseModel):
     url: str
+
+class ModelHealthRequest(BaseModel):
+    provider: Optional[str] = None
+    modelo: Optional[str] = None
+    servico: Optional[str] = None
+    tentativas: Optional[int] = None
+    testar_todos: bool = False
 
 
 # Serve static storage files if Backblaze B2 is fallback local
@@ -432,6 +441,39 @@ def listar_provedores_endpoint():
         "padrao": os.environ.get("SCRIPT_PROVIDER", "auto"),
         "provedores": listar_provedores(),
     }
+
+@app.get("/api/models/agents")
+def listar_agentes_endpoint():
+    """Agentes de IA (nome + sobrenome) por servico, com titulares e reservas."""
+    return {"agentes": listar_agentes()}
+
+@app.post("/api/models/health")
+def health_modelos_endpoint(body: ModelHealthRequest = ModelHealthRequest()):
+    """
+    Testa modelos de verdade e devolve aprovados/reprovados.
+
+    - Ollama: 3 tentativas antes de reprovar.
+    - Demais: 2 tentativas.
+    - Se `testar_todos` for True, varre todos os candidatos conhecidos.
+    - Nunca devolve chaves.
+    """
+    try:
+        if body.testar_todos:
+            return llm_router.testar_candidatos(
+                provider=body.provider, so_configurados=True, servico=body.servico,
+            )
+        if not body.provider or not body.modelo:
+            raise HTTPException(status_code=400, detail="Informe provider e modelo, ou use testar_todos.")
+        resultado = llm_router.testar_modelo(
+            body.provider, body.modelo,
+            tentativas=body.tentativas, servico=body.servico,
+        )
+        return {"resultados": [resultado], "aprovados": [resultado] if resultado["status"] == "aprovado" else [],
+                "reprovados": [resultado] if resultado["status"] == "reprovado" else []}
+    except HTTPException:
+        raise
+    except (ValueError, RuntimeError) as err:
+        raise HTTPException(status_code=400, detail=str(err))
 
 @app.post("/api/scripts/generate")
 def generate_script_endpoint(body: ScriptGenerateRequest):

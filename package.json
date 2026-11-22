@@ -1,0 +1,10 @@
+{
+  "name": "natodark-pages",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Build do Cloudflare Pages: gera o frontend estatico em dist/",
+  "scripts": {
+    "build": "npm ci --prefix frontend --no-audit --no-fund && npm run build --prefix frontend && node scripts/copy-out.mjs",
+    "dev": "npm run dev --prefix frontend"
+  }
+}
