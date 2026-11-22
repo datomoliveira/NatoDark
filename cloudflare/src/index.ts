@@ -207,6 +207,7 @@ export default {
 
         return json({
           aprovados: resultados.filter((r) => r.status === "aprovado"),
+          instaveis: resultados.filter((r) => r.status === "instavel"),
           reprovados: resultados.filter((r) => r.status === "reprovado"),
         }, env);
       }

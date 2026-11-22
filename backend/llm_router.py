@@ -51,15 +51,17 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
         "nome": "Google Gemini",
         "custo": "gratuito",
         "env_chave": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
-        "modelo": os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
-        "modelo_leve": os.environ.get("GEMINI_LITE_MODEL", "gemini-2.5-flash-lite"),
+        # 3.8-flash deu 503/524 por capacidade; 3.5-flash-lite foi aprovado em teste real.
+        "modelo": os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite"),
+        "modelo_leve": os.environ.get("GEMINI_LITE_MODEL", "gemini-3.1-flash-lite"),
         "env_modelo": "GEMINI_MODEL",
     },
     "nvidia": {
         "nome": "NVIDIA NIM",
         "custo": "gratuito (endpoints free)",
         "env_chave": ("NVIDIA_API_KEY",),
-        "modelo": os.environ.get("NVIDIA_MODEL", "nvidia/llama-3.3-nemotron-super-49b-v1.5"),
+        # Modelo antigo retornou 410 Gone; este foi aprovado em teste real.
+        "modelo": os.environ.get("NVIDIA_MODEL", "nvidia/nemotron-3-ultra-550b-a55b"),
         "env_modelo": "NVIDIA_MODEL",
     },
     "groq": {
@@ -73,7 +75,8 @@ PROVIDERS: Dict[str, Dict[str, Any]] = {
         "nome": "OpenRouter",
         "custo": "gratuito (modelos :free)",
         "env_chave": ("OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY"),
-        "modelo": os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"),
+        # O llama-3.3 :free virou pago (404). Este :free foi aprovado em teste real.
+        "modelo": os.environ.get("OPENROUTER_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"),
         "env_modelo": "OPENROUTER_MODEL",
     },
     # --- Provedores do repositorio awesome-free-llm-apis (testados/sem chave) ---
@@ -611,12 +614,17 @@ def testar_modelo(
         except Exception as err:
             erros.append(_seguro(err))
 
+    transient = any(
+        sinal in erro
+        for erro in erros
+        for sinal in ("429", "503", "524", "timeout", "capacity", "Too many")
+    )
     return {
         "provider": provider,
         "modelo": modelo,
         "agente": agente,
         "servico": servico,
-        "status": "reprovado",
+        "status": "instavel" if transient else "reprovado",
         "tentativas_realizadas": tentativas,
         "tentativas_permitidas": tentativas,
         "latencia_ms": int((time.monotonic() - inicio) * 1000),
@@ -652,10 +660,12 @@ def testar_candidatos(
         ))
 
     aprovados = [r for r in resultados if r.get("status") == "aprovado"]
+    instaveis = [r for r in resultados if r.get("status") == "instavel"]
     reprovados = [r for r in resultados if r.get("status") == "reprovado"]
     return {
-        "total_testados": len(aprovados) + len(reprovados),
+        "total_testados": len(aprovados) + len(instaveis) + len(reprovados),
         "aprovados": aprovados,
+        "instaveis": instaveis,
         "reprovados": reprovados,
         "nao_testados": [r for r in resultados if r.get("status") == "nao_testado"],
     }

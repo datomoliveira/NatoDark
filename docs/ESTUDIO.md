@@ -108,7 +108,27 @@ Cada modelo aprovado recebe um agente com nome e sobrenome por função:
 Dr. Gancho da Silva Corte Seco (roteiro), Capitão Clickbait Pereira (títulos),
 Dona Curiosidade AlmeidaTrend (hype), Zé Legendinha Santos (legendas),
 Prof. Pattern Interrupt Gomes (revisão) e Tio fallback Ribeiro (reserva).
-Ollama só é reprovado após **3 tentativas**; os demais, após 2.
+Ollama só é reprovado após **3 tentativas**; os demais, após 2. Erros 429/503/524
+são classificados como `instavel` (não são aprovação, mas também não queimam o modelo
+por pico temporário).
+
+**Resultado do teste real em 2026-11-22** (via `POST /api/models/health`):
+
+| Status | Provider / modelo |
+|---|---|
+| aprovado | `gemini-3.5-flash-lite` (reserva: `gemini-3.1-flash-lite`) |
+| aprovado | `nvidia/nemotron-3-ultra-550b-a55b` |
+| aprovado | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` (OpenRouter) |
+| aprovado | `kilocode/kilo-auto/free` (sem chave) |
+| aprovado | `ovh/Meta-Llama-3_3-70B-Instruct` (sem chave, reserva) |
+| instável | `llm7/gpt-oss:20b` (429 a partir do IP da Cloudflare) |
+| reprovado | `gemini-3.8-flash` (503/524 por capacidade), `gemini-3.6-flash` (não JSON) |
+| reprovado | modelos NVIDIA antigos (410 Gone) e OpenRouter `:free` antigos (virou pago/404) |
+| reprovado | Ollama Cloud (`glm-5.3-flash:cloud` exige créditos; `qwen3.5:cloud` aposentado) |
+
+Defaults do router já foram trocados para os aprovados. Ollama local continua
+disponível se você definir `OLLAMA_URL`; a chave `OLLAMA_API_KEY` aponta para a
+nuvem, que hoje não tem créditos nesta conta.
 
 ### Por que a API do YouTube é opcional
 

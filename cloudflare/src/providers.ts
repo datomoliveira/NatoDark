@@ -67,7 +67,7 @@ export const PROVIDERS: Record<ProviderId, Meta> = {
     custo: "gratuito",
     envChave: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
     envModelo: "GEMINI_MODEL",
-    modeloPadrao: "gemini-3.8-flash",
+    modeloPadrao: "gemini-3.5-flash-lite", // 3.8-flash deu 503/524; aprovado em teste real
     configurado: (e) => !!primeiroEnv(e, ["GEMINI_API_KEY", "GOOGLE_API_KEY"]),
   },
   nvidia: {
@@ -75,7 +75,7 @@ export const PROVIDERS: Record<ProviderId, Meta> = {
     custo: "gratuito (endpoints free)",
     envChave: ["NVIDIA_API_KEY"],
     envModelo: "NVIDIA_MODEL",
-    modeloPadrao: "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+    modeloPadrao: "nvidia/nemotron-3-ultra-550b-a55b", // aprovado; o antigo deu 410 Gone
     configurado: (e) => !!primeiroEnv(e, ["NVIDIA_API_KEY"]),
   },
   groq: {
@@ -91,7 +91,7 @@ export const PROVIDERS: Record<ProviderId, Meta> = {
     custo: "gratuito (modelos :free)",
     envChave: ["OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY"],
     envModelo: "OPENROUTER_MODEL",
-    modeloPadrao: "meta-llama/llama-3.3-70b-instruct:free",
+    modeloPadrao: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", // :free aprovado
     configurado: (e) => !!primeiroEnv(e, ["OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY"]),
   },
   // awesome-free-llm-apis — 3 aprovados em teste real, sem chave.
@@ -589,12 +589,15 @@ export async function testarModelo(
       erros.push(segredo(env, String(err)));
     }
   }
+  const transient = erros.some((e) =>
+    ["429", "503", "524", "timeout", "capacity", "Too many"].some((s) => e.includes(s)),
+  );
   return {
     provider: id,
     modelo,
     agente: nomeAgente(servico),
     servico,
-    status: "reprovado",
+    status: transient ? "instavel" : "reprovado",
     tentativas_realizadas: permitidas,
     tentativas_permitidas: permitidas,
     latencia_ms: Date.now() - inicio,

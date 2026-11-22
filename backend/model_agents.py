@@ -58,28 +58,24 @@ PONTOS: Dict[str, Dict[str, int]] = {
 # Todos sao modelos de texto; visao/audio ficam fora do router.
 CANDIDATOS: List[Dict[str, Any]] = [
     # Google Gemini — tier gratuito generoso, bom padrao para roteiro.
-    {"provider": "gemini", "modelo": "gemini-2.5-flash", "servicos": ["roteiro", "titulos", "revisao"]},
-    {"provider": "gemini", "modelo": "gemini-2.5-flash-lite", "servicos": ["titulos", "legendas", "reserva"]},
+    {"provider": "gemini", "modelo": "gemini-3.5-flash-lite", "servicos": ["roteiro", "titulos", "revisao"], "status": "aprovado"},
+    {"provider": "gemini", "modelo": "gemini-3.1-flash-lite", "servicos": ["titulos", "legendas", "reserva"], "status": "aprovado"},
     # NVIDIA NIM — endpoints gratuitos, compativeis com OpenAI.
-    {"provider": "nvidia", "modelo": "nvidia/llama-3.3-nemotron-super-49b-v1.5", "servicos": ["roteiro", "revisao"]},
-    {"provider": "nvidia", "modelo": "meta/llama-4-maverick-17b-128e-instruct", "servicos": ["roteiro", "titulos", "hype"]},
-    {"provider": "nvidia", "modelo": "mistralai/mistral-large-3-675b-instruct-2512", "servicos": ["roteiro", "revisao"]},
-    {"provider": "nvidia", "modelo": "qwen/qwen3-coder-480b-a35b-instruct", "servicos": ["revisao", "reserva"]},
+    {"provider": "nvidia", "modelo": "nvidia/nemotron-3-ultra-550b-a55b", "servicos": ["roteiro", "revisao"], "status": "aprovado"},
     # Groq — muito rapido, otimo para titulos e testes.
     {"provider": "groq", "modelo": "llama-3.3-70b-versatile", "servicos": ["roteiro", "titulos", "reserva"]},
     {"provider": "groq", "modelo": "openai/gpt-oss-120b", "servicos": ["hype", "revisao"]},
     # OpenRouter — modelos :free.
-    {"provider": "openrouter", "modelo": "meta-llama/llama-3.3-70b-instruct:free", "servicos": ["roteiro", "reserva"]},
-    {"provider": "openrouter", "modelo": "google/gemma-3-27b-it:free", "servicos": ["titulos", "legendas"]},
+    {"provider": "openrouter", "modelo": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "servicos": ["roteiro", "reserva"], "status": "aprovado"},
     # Workers AI.
     {"provider": "cloudflare", "modelo": "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "servicos": ["roteiro", "reserva"]},
     # Opcionais pagos.
     {"provider": "openai", "modelo": "gpt-4o-mini", "servicos": ["legendas", "revisao", "titulos"]},
     {"provider": "anthropic", "modelo": "claude-sonnet-4-5", "servicos": ["roteiro", "revisao"]},
     # Ollama (modelos locais que você instalou).
-    {"provider": "ollama", "modelo": "llama3.1", "servicos": ["roteiro", "reserva"]},
-    {"provider": "ollama", "modelo": "gemma3", "servicos": ["titulos", "legendas"]},
-    {"provider": "ollama", "modelo": "qwen2.5", "servicos": ["revisao", "reserva"]},
+    {"provider": "ollama", "modelo": "llama3.1", "servicos": ["roteiro", "reserva"], "status": "local"},
+    {"provider": "ollama", "modelo": "gemma3", "servicos": ["titulos", "legendas"], "status": "local"},
+    {"provider": "ollama", "modelo": "qwen2.5", "servicos": ["revisao", "reserva"], "status": "local"},
     # awesome-free-llm-apis — aprovados em teste real, sem chave.
     {"provider": "kilocode", "modelo": "kilo-auto/free", "servicos": ["roteiro", "titulos", "reserva"]},
     {"provider": "llm7", "modelo": "gpt-oss:20b", "servicos": ["roteiro", "reserva"]},

@@ -468,8 +468,12 @@ def health_modelos_endpoint(body: ModelHealthRequest = ModelHealthRequest()):
             body.provider, body.modelo,
             tentativas=body.tentativas, servico=body.servico,
         )
-        return {"resultados": [resultado], "aprovados": [resultado] if resultado["status"] == "aprovado" else [],
-                "reprovados": [resultado] if resultado["status"] == "reprovado" else []}
+        return {
+            "resultados": [resultado],
+            "aprovados": [resultado] if resultado["status"] == "aprovado" else [],
+            "instaveis": [resultado] if resultado["status"] == "instavel" else [],
+            "reprovados": [resultado] if resultado["status"] == "reprovado" else [],
+        }
     except HTTPException:
         raise
     except (ValueError, RuntimeError) as err:
