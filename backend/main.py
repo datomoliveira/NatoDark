@@ -229,7 +229,7 @@ class ScriptGenerateRequest(BaseModel):
 
 class AutoMediaRequest(BaseModel):
     tema: Optional[str] = None
-    fontes: List[str] = ["youtube", "pexels", "pixabay", "openverse", "wikimedia"]
+    fontes: List[str] = ["youtube", "pexels", "pixabay", "unsplash", "openverse", "wikimedia"]
     youtube_urls: Optional[List[str]] = None  # uma URL por bloco; vazia = busca ytsearch
     youtube_licenca: Optional[str] = None
     usar_gemini: bool = True

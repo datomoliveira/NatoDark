@@ -54,6 +54,11 @@ npx wrangler secret put OLLAMA_API_KEY        # opcional: Ollama Cloud (https://
 npx wrangler secret put CF_ACCOUNT_ID
 npx wrangler secret put CF_API_TOKEN          # permissão "Workers AI - Edit"
 
+# Mídia automática (opcionais, gratuitas):
+npx wrangler secret put PEXELS_API_KEY        # https://www.pexels.com/api/
+npx wrangler secret put PIXABAY_API_KEY       # https://pixabay.com/api/docs/
+npx wrangler secret put UNSPLASH_ACCESS_KEY   # https://unsplash.com/developers
+
 # Pagos, só se quiser:
 npx wrangler secret put OPENAI_API_KEY
 npx wrangler secret put ANTHROPIC_API_KEY

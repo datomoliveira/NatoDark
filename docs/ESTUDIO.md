@@ -54,6 +54,7 @@ Secrets da Cloudflare (`wrangler secret put NOME`).
 | `CF_ACCOUNT_ID` + `CF_API_TOKEN` | Gratuito | Workers AI (fallback) e deploy | painel Cloudflare; token com `Workers AI - Edit` |
 | `PEXELS_API_KEY` | Gratuita — melhora muito a mídia | busca de stock | https://www.pexels.com/api/ |
 | `PIXABAY_API_KEY` | Gratuita | segundo fallback de stock | https://pixabay.com/api/docs/ |
+| `UNSPLASH_ACCESS_KEY` | Gratuita (demo: 50 req/h) | fotos de stock (4º da fila) | https://unsplash.com/developers |
 | `API_TOKEN` | Recomendado | protege `/api` do Worker | gere um token forte você mesmo |
 | `YOUTUBE_API_KEY` | **Opcional** | análise dos **seus** vídeos (metadados/comentários); **não** é preciso para baixar clipes | Google Cloud Console |
 | `YOUTUBE_COOKIES_FILE` | Opcional | cookies locais se o YouTube exigir login (caminho de arquivo, **não** um Secret) | exportação do navegador |
@@ -63,7 +64,7 @@ Secrets da Cloudflare (`wrangler secret put NOME`).
 Sem **nenhuma** chave de IA, o router ainda tenta `ollama` local
 (`OLLAMA_URL`, `OLLAMA_MODEL`). Para mídia, **YouTube vem primeiro** via
 `yt-dlp` (sem chave: URL colada ou busca `ytsearch`); se falhar, segue
-**Pexels → Pixabay → Openverse → Wikimedia Commons** e slides locais, sempre
+**Pexels → Pixabay → Unsplash → Openverse → Wikimedia Commons** e slides locais, sempre
 com `credits.json`. O download/recorte é local — nada disso roda na Cloudflare.
 
 ### Bancos de imagem/vídeo gratuitos — links exatos
@@ -75,7 +76,7 @@ com `credits.json`. O download/recorte é local — nada disso roda na Cloudflar
 | Pixabay | Docs: https://pixabay.com/api/docs/ · conta: https://pixabay.com/accounts/ | Sim, gratuita | vídeos e fotos (3º da fila) |
 | Openverse | API: https://api.openverse.org/v1/images/ · busca: https://openverse.org/ | **Não** | fotos CC/public domain (4º da fila) |
 | Wikimedia Commons | API: https://commons.wikimedia.org/w/api.php | **Não** | fotos e vídeos (5º da fila) |
-| Unsplash | https://unsplash.com/developers | Sim, gratuita | referência/fotos (não integrada ao auto-scout) |
+| Unsplash | API: https://unsplash.com/developers · cadastro: https://unsplash.com/oauth/applications | Sim, gratuita (Access Key) | fotos (4º da fila) |
 
 ### Clipes do YouTube (matéria-prima)
 
@@ -102,6 +103,24 @@ Para pegar a chave da Pixabay: crie conta em `pixabay.com/accounts/`, entre em
 **Account settings → API**, copie a chave e cole em `PIXABAY_API_KEY`.
 A da Pexels: `pexels.com/api/new/` → preencha o formulário → copie em
 `PEXELS_API_KEY`. Se o site estiver fora, use Openverse/Wikimedia — não travam.
+
+Para pegar a **Access Key do Unsplash**: abra
+`https://unsplash.com/oauth/applications` → **New Application** → aceite as
+diretrizes da API → preencha nome e descrição.
+
+- **Redirect URI**: o campo é obrigatório no cadastro, mas a busca com Access Key
+  não usa OAuth. Coloque `https://natodark.pages.dev/` (ou
+  `http://localhost:3000/` se for testar local). Só precisa ser exato se você
+  implementar o fluxo de autorização do usuário depois.
+- **Permissões/scopes**: deixe só o padrão `public` (leitura de dados públicos).
+  Não marque `read_user`, `write_user`, `write_photos`, `read_photos` etc. —
+  buscar e baixar fotos não exige escopo extra.
+- Copie a **Access Key** (não a Secret Key) para `UNSPLASH_ACCESS_KEY`. A chave
+  vai como `Authorization: Client-ID ...` e a API registra o download pelo
+  `download_location`; o crédito do fotógrafo vai para `credits.json`.
+- O app começa em **demo mode** (50 req/h). Se virar produção, peça o aumento
+  para 1000 req/h no próprio painel do app. Respeite a atribuição e mantenha o
+  parâmetro `ixid` nas URLs do CDN.
 
 ### Provedores extras do awesome-free-llm-apis
 

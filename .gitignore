@@ -10,6 +10,7 @@ backend/temp_test_assets/
 cloudflare/node_modules/
 cloudflare/.dev.vars
 cloudflare/.wrangler/
+.wrangler/
 
 # Cloudflare Pages build output
 dist/

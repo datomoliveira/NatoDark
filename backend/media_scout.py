@@ -5,7 +5,8 @@ Fontes (em ordem de preferencia):
   1. YouTube  -> clipes via yt-dlp, SEM chave (URL colada ou busca ytsearch)
   2. Pexels   -> video/images gratis, chave gratuita PEXELS_API_KEY
   3. Pixabay  -> video/images gratis, chave gratuita PIXABAY_API_KEY
-  4. Openverse / Wikimedia Commons -> CC / dominio publico, SEM chave
+  4. Unsplash -> fotos, chave gratuita UNSPLASH_ACCESS_KEY
+  5. Openverse / Wikimedia Commons -> CC / dominio publico, SEM chave
 
 O download e o recorte do YouTube acontecem LOCALMENTE (youtube_clips.py);
 nada disso roda na Cloudflare. Use apenas videos proprios/autorizados e
@@ -273,6 +274,49 @@ def _buscar_pixabay(query: str, tipo: str, chave: str) -> Optional[Dict[str, str
         return None
 
 
+def _buscar_unsplash(query: str, chave: str) -> Optional[Dict[str, str]]:
+    """
+    Unsplash so tem fotos. Autenticacao publica: `Authorization: Client-ID ...`.
+    O download e registrado no endpoint `download_location` (exigido pelas
+    diretrizes da API) e o credito do fotografo vai para credits.json.
+    """
+    headers = {**HEADERS, "Authorization": f"Client-ID {chave}", "Accept-Version": "v1"}
+    try:
+        r = requests.get(
+            "https://api.unsplash.com/search/photos",
+            headers=headers,
+            params={"query": query, "per_page": 5, "orientation": "landscape"},
+            timeout=TIMEOUT,
+        )
+        if r.status_code != 200:
+            return None
+        resultados = r.json().get("results") or []
+        if not resultados:
+            return None
+        item = resultados[0]
+        urls = item.get("urls") or {}
+        foto = urls.get("regular") or urls.get("small") or ""
+        if not foto:
+            return None
+        # Registra o download para a estatistica do fotografo (best-effort).
+        download_location = (item.get("links") or {}).get("download_location")
+        if download_location:
+            try:
+                requests.post(download_location, headers=headers, timeout=(5, 10))
+            except Exception:
+                pass
+        return {
+            "url": foto,
+            "pagina": (item.get("links") or {}).get("html", ""),
+            "autor": (item.get("user") or {}).get("name", ""),
+            "licenca": "Unsplash License (uso gratuito; atribuicao recomendada)",
+            "fonte": "Unsplash",
+        }
+    except Exception as err:
+        print(f"[MediaScout] Unsplash falhou: {err}")
+        return None
+
+
 def _buscar_wikimedia(query: str, tipo: str) -> Optional[Dict[str, str]]:
     filtro = "filetype:video" if tipo == "video" else "filetype:bitmap"
     try:
@@ -426,13 +470,13 @@ def build_auto_timeline(
     Busca midia para cada bloco e SUBSTITUI a timeline do projeto.
     Devolve relatorio com creditos de atribuicao.
     """
-    fontes = fontes or ["youtube", "pexels", "pixabay", "openverse", "wikimedia"]
+    fontes = fontes or ["youtube", "pexels", "pixabay", "unsplash", "openverse", "wikimedia"]
     fontes = [
         f.lower() for f in fontes
-        if f.lower() in ("youtube", "pexels", "pixabay", "openverse", "wikimedia")
+        if f.lower() in ("youtube", "pexels", "pixabay", "unsplash", "openverse", "wikimedia")
     ]
     if not fontes:
-        fontes = ["youtube", "openverse", "wikimedia"]
+        fontes = ["youtube", "unsplash", "openverse", "wikimedia"]
 
     blocos = _blocos_do_roteiro(roteiro_json, script_texto)[: max(1, max_blocos)]
     if not blocos:
@@ -485,6 +529,12 @@ def build_auto_timeline(
                 if not chave:
                     continue
                 encontrado = _buscar_pixabay(query, tipo, chave)
+            elif fonte == "unsplash":
+                chave = os.environ.get("UNSPLASH_ACCESS_KEY")
+                if not chave:
+                    continue
+                tipo = "image"  # Unsplash e banco de fotos: entra como still.
+                encontrado = _buscar_unsplash(query, chave)
             elif fonte == "openverse":
                 encontrado = _buscar_openverse(query, tipo)
             else:
