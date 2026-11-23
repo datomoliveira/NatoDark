@@ -13,7 +13,7 @@ Guia único de configuração e operação. Tudo em pt-BR.
                   │ FastAPI + Next.js (estúdio local)          │
                   │  1. roteiro (router)   2. hype (HTML)      │
                   │  3. sua VOZ → Whisper → SRT sincronizado   │
-                  │  4. mídia licenciada (Pexels/Pixabay/Commons)
+                  │  4. mídia: YouTube (yt-dlp) → stock → CC
                   │  5. ffmpeg local → final.mp4               │
                   └────────────────────────────────────────────┘
 ```
@@ -55,23 +55,48 @@ Secrets da Cloudflare (`wrangler secret put NOME`).
 | `PEXELS_API_KEY` | Gratuita — melhora muito a mídia | busca de stock | https://www.pexels.com/api/ |
 | `PIXABAY_API_KEY` | Gratuita | segundo fallback de stock | https://pixabay.com/api/docs/ |
 | `API_TOKEN` | Recomendado | protege `/api` do Worker | gere um token forte você mesmo |
-| `YOUTUBE_API_KEY` | **Opcional** | análise dos **seus** vídeos (metadados/comentários) | Google Cloud Console |
+| `YOUTUBE_API_KEY` | **Opcional** | análise dos **seus** vídeos (metadados/comentários); **não** é preciso para baixar clipes | Google Cloud Console |
+| `YOUTUBE_COOKIES_FILE` | Opcional | cookies locais se o YouTube exigir login (caminho de arquivo, **não** um Secret) | exportação do navegador |
 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | Pagos, opcionais | último fallback de roteiro | — |
 | `HF_TOKEN` | Opcional | só cota/velocidade no download do Whisper | huggingface.co |
 
 Sem **nenhuma** chave de IA, o router ainda tenta `ollama` local
-(`OLLAMA_URL`, `OLLAMA_MODEL`). Sem chaves de stock, o sistema usa
-**Openverse → Wikimedia Commons** e slides locais com `credits.json`.
+(`OLLAMA_URL`, `OLLAMA_MODEL`). Para mídia, **YouTube vem primeiro** via
+`yt-dlp` (sem chave: URL colada ou busca `ytsearch`); se falhar, segue
+**Pexels → Pixabay → Openverse → Wikimedia Commons** e slides locais, sempre
+com `credits.json`. O download/recorte é local — nada disso roda na Cloudflare.
 
 ### Bancos de imagem/vídeo gratuitos — links exatos
 
 | Banco | Link da API / cadastro | Chave? | Uso aqui |
 |---|---|---|---|
-| Pexels | API: https://www.pexels.com/api/ · cadastro: https://www.pexels.com/api/new/ | Sim, gratuita | vídeos e fotos (1º da fila) |
-| Pixabay | Docs: https://pixabay.com/api/docs/ · conta: https://pixabay.com/accounts/ | Sim, gratuita | vídeos e fotos (2º da fila) |
-| Openverse | API: https://api.openverse.org/v1/images/ · busca: https://openverse.org/ | **Não** | fotos CC/public domain (3º da fila) |
-| Wikimedia Commons | API: https://commons.wikimedia.org/w/api.php | **Não** | fotos e vídeos (4º da fila) |
+| YouTube | https://www.youtube.com/ · yt-dlp: https://github.com/yt-dlp/yt-dlp | **Não** | clipes como matéria-prima (1º da fila, download local) |
+| Pexels | API: https://www.pexels.com/api/ · cadastro: https://www.pexels.com/api/new/ | Sim, gratuita | vídeos e fotos (2º da fila) |
+| Pixabay | Docs: https://pixabay.com/api/docs/ · conta: https://pixabay.com/accounts/ | Sim, gratuita | vídeos e fotos (3º da fila) |
+| Openverse | API: https://api.openverse.org/v1/images/ · busca: https://openverse.org/ | **Não** | fotos CC/public domain (4º da fila) |
+| Wikimedia Commons | API: https://commons.wikimedia.org/w/api.php | **Não** | fotos e vídeos (5º da fila) |
 | Unsplash | https://unsplash.com/developers | Sim, gratuita | referência/fotos (não integrada ao auto-scout) |
+
+### Clipes do YouTube (matéria-prima)
+
+No gerador, o campo **Clipes do YouTube (opcional)** aceita uma URL por linha,
+na mesma ordem dos blocos do roteiro. Se ficar vazio, o `media_scout` faz busca
+por HTML (`ytsearch`) usando a sugestão visual do bloco — sem API key e sem
+cota. Também dá para buscar candidatos com:
+
+```bash
+curl -s "http://localhost:8000/api/youtube/clips/search?q=aviao%20sobre%20o%20mar&limite=3"
+```
+
+O `youtube_clips.py` usa yt-dlp para baixar **só o intervalo** de cada bloco
+(`youtube_inicio` + `duracao_segundos`, no máximo 30s) e o ffmpeg do
+`imageio-ffmpeg` para recortar sem áudio. O arquivo vai para o storage do
+projeto e o compiler faz o resto normalmente.
+
+⚠️ **Use apenas vídeos próprios ou autorizados.** Content ID e direitos autorais
+não mudam porque o trecho é curto; canal, título, URL e licença informada são
+gravados em `projects/<id>/media/credits.json`. Se o YouTube pedir login,
+defina `YOUTUBE_COOKIES_FILE` no seu computador (nunca na Cloudflare).
 
 Para pegar a chave da Pixabay: crie conta em `pixabay.com/accounts/`, entre em
 **Account settings → API**, copie a chave e cole em `PIXABAY_API_KEY`.
@@ -152,9 +177,9 @@ nuvem, que hoje não tem créditos nesta conta.
 2. **Gerar Roteiro** → `auto` escolhe o provedor disponível; hook, curiosidade
    distribuída, pattern interrupt, cliffhanger, loop e CTA. Regras de âncora e
    título incluídas no prompt.
-3. **Buscar e aplicar mídia** → uma cena por bloco, Pexels → Pixabay →
-   Openverse → Wikimedia, com créditos em `credits.json`. **Nunca** usa clipes
-   do YouTube.
+3. **Buscar e aplicar mídia** → uma cena por bloco. Cole as URLs do YouTube
+   (ou deixe a busca automática): YouTube → Pexels → Pixabay → Openverse →
+   Wikimedia → slide local. Créditos em `credits.json`.
 4. **Enviar sua voz** na aba de áudio → **Sincronizar com minha voz**: o
    faster-whisper gera SRT com timestamps reais, alinha os blocos e grava
    `subtitle_style.srt_key`. O compiler prefere esse SRT ao estimado por
@@ -175,9 +200,20 @@ Secrets que você já cadastrou (`GEMINI_API_KEY`, `NVIDIA_API_KEY`,
 `OPEN_ROUTER_API_KEY`, `OLLAMA_API_KEY`) — não precisa copiá-los para o Worker.
 `dist/_routes.json` faz a Function só rodar em `/api/*`.
 
-O Worker separado `natodark-studio` (`cd cloudflare && npx wrangler deploy`)
-continua disponível se você quiser a API fora do Pages; nesse caso ele precisa
-dos próprios Secrets via `wrangler secret put`.
+O Worker separado `natodark-studio` está deployado em
+`https://natodark-studio.datomoliveira.workers.dev` (commit atual). Ele é útil
+para chamar a API de fora do Pages e enxerga **os próprios** Secrets — que não
+são os mesmos do Pages. Para cadastrá-los sem expor valores:
+
+```bash
+export CLOUDFLARE_API_TOKEN='...'
+export CLOUDFLARE_ACCOUNT_ID='9fd8bdbeea597f736671266d49bb6574'
+export GEMINI_API_KEY='...'   # etc. (ou deixe em backend/.env, gitignored)
+./scripts/set-secrets.sh all  # ou: worker | pages
+```
+
+O script só imprime `OK/PULA`, nunca o valor. YouTube/ffmpeg continuam locais:
+Workers não têm yt-dlp nem binário ffmpeg.
 
 Detalhes, R2 opcional e exemplos de `curl` em `cloudflare/README.md`.
 

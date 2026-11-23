@@ -10,7 +10,8 @@ e sem expor chave na API.
 |---|---|---|
 | Gerar roteiro (router multi-provider) | **Pages Function** `/api/*` ✅ | Roda no mesmo projeto Pages e enxerga os Secrets já cadastrados |
 | Escolher queries de mídia por bloco | Pages Function / backend ✅ | Também é só texto |
-| Worker separado `natodark-studio` | opcional | Útil se quiser rodar a API fora do Pages; exige seus próprios Secrets |
+| Worker separado `natodark-studio` | **deployado** ✅ | API fora do Pages; enxerga os próprios Secrets (diferentes dos do Pages) |
+| Clipes do YouTube (yt-dlp + recorte) | backend local ✅ | Workers não têm yt-dlp nem ffmpeg |
 | Buscar stock (Pexels/Pixabay/Openverse/Wikimedia) | backend local ✅ | Precisa das chaves de stock e storage |
 | Cortar/compilar com ffmpeg | **local / VPS** ❌ no Worker | Workers têm 10 ms de CPU no plano free, 128 MB de memória e nenhum binário ffmpeg |
 
@@ -27,8 +28,18 @@ npx wrangler login
 
 ## 2. Colocar os modelos nos Secrets
 
-Rode um comando por chave que você quer usar. O nome é o **mesmo** do
-`.env.example` do backend:
+Use o script abaixo (da raiz do repo) para cadastrar várias chaves de uma vez,
+sem imprimir valores. Ele aceita variáveis de ambiente ou `backend/.env`
+(gitignored) e atualiza Worker e Pages:
+
+```bash
+export CLOUDFLARE_API_TOKEN='...'
+export CLOUDFLARE_ACCOUNT_ID='9fd8bdbeea597f736671266d49bb6574'
+export GEMINI_API_KEY='...'   # etc.
+./scripts/set-secrets.sh all  # ou: worker | pages
+```
+
+Ou, se preferir um por um, o nome é o **mesmo** do `.env.example` do backend:
 
 ```bash
 # Recomendado começar por um gratuito:
@@ -74,7 +85,9 @@ O site (`natodark.pages.dev`) é **Cloudflare Pages** e o build roda na raiz do
 repo (`npm run build` → `frontend/out` copiado para `dist/`; veja `wrangler.toml`
 da raiz). A API principal é a **Pages Function** em `functions/api/[[path]].ts`
 — mesma origem, mesma conta, mesmos Secrets. O `cloudflare/` aqui é o Worker
-separado opcional (Pages não aceita `main` de Worker).
+separado `natodark-studio`, deployado em
+`https://natodark-studio.datomoliveira.workers.dev` (Pages não aceita `main`
+de Worker). As chaves dele são independentes das do Pages.
 
 As chaves que você já cadastrou como **Pages Secrets** são usadas direto pela
 Pages Function em `functions/api/[[path]].ts`. Não é preciso copiá-las para o

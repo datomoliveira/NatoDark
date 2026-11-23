@@ -38,6 +38,7 @@ from media_scout import build_auto_timeline
 from transcriber import sincronizar_projeto
 from hype_research import pesquisar_hype
 import youtube_api
+import youtube_clips
 
 # Sequential background job queue
 compilation_queue = asyncio.Queue()
@@ -228,7 +229,9 @@ class ScriptGenerateRequest(BaseModel):
 
 class AutoMediaRequest(BaseModel):
     tema: Optional[str] = None
-    fontes: List[str] = ["pexels", "pixabay", "openverse", "wikimedia"]
+    fontes: List[str] = ["youtube", "pexels", "pixabay", "openverse", "wikimedia"]
+    youtube_urls: Optional[List[str]] = None  # uma URL por bloco; vazia = busca ytsearch
+    youtube_licenca: Optional[str] = None
     usar_gemini: bool = True
     max_blocos: int = 12
 
@@ -522,17 +525,35 @@ def generate_script_endpoint(body: ScriptGenerateRequest):
 @app.post("/api/projects/{id}/media/auto")
 def auto_media(id: str, body: AutoMediaRequest):
     """
-    Busca midia licenciada para cada bloco do roteiro e monta a timeline.
-    Nao usa video do YouTube: prioriza Pexels, Pixabay e Wikimedia Commons.
+    Busca midia para cada bloco do roteiro e monta a timeline.
+    Prioridade: YouTube (yt-dlp local) -> Pexels -> Pixabay -> Openverse ->
+    Wikimedia -> slide local. Use apenas clipes proprios/autorizados.
     """
     projeto = get_project(id)
     if not projeto:
         raise HTTPException(status_code=404, detail="Projeto não encontrado.")
 
-    roteiro = projeto.get("script_json") or {
+    roteiro = dict(projeto.get("script_json") or {
         "roteiro_texto": projeto.get("script", ""),
         "sec_per_block": (projeto.get("subtitle_style") or {}).get("sec_per_block", 3.0),
-    }
+    })
+
+    # URLs do YouTube coladas no frontend: uma por bloco, na mesma ordem.
+    if body.youtube_urls or body.youtube_licenca:
+        blocos = [
+            dict(b) if isinstance(b, dict) else b
+            for b in (roteiro.get("blocos") or [])
+        ]
+        for i, bloco in enumerate(blocos):
+            if not isinstance(bloco, dict):
+                continue
+            if body.youtube_urls and i < len(body.youtube_urls):
+                url = (body.youtube_urls[i] or "").strip()
+                if url:
+                    bloco["youtube_url"] = url
+            if body.youtube_licenca:
+                bloco["youtube_licenca"] = body.youtube_licenca.strip()
+        roteiro["blocos"] = blocos
 
     try:
         return build_auto_timeline(
@@ -604,6 +625,23 @@ def youtube_config():
             "A API nao expoe o grafico de retencao; isso so existe no YouTube Studio. "
             "A pesquisa de hype continua usando HTML do navegador, sem cota."
         ),
+    }
+
+@app.get("/api/youtube/clips/search")
+def youtube_clips_search(q: str, limite: int = 3):
+    """
+    Busca candidatos de clipe por HTML (ytsearch), sem chave de API.
+    O download/recorte acontece depois, no /media/auto.
+    """
+    if not youtube_clips.configurado():
+        raise HTTPException(
+            status_code=400,
+            detail="yt-dlp nao instalado no backend (pip install -r requirements.txt).",
+        )
+    return {
+        "configurado": True,
+        "candidatos": youtube_clips.buscar(q, limite=limite),
+        "observacao": "Use apenas videos proprios ou autorizados; creditos gravados em credits.json.",
     }
 
 @app.get("/api/youtube/video/{video_id}")

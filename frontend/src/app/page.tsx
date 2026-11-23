@@ -74,6 +74,9 @@ export default function NatoDarkStudio() {
   const [provedoresInfo, setProvedoresInfo] = useState<any[]>([]);
   const [autoMediaLoading, setAutoMediaLoading] = useState(false);
   const [autoMediaResult, setAutoMediaResult] = useState<any>(null);
+  // Clipes do YouTube como materia-prima (uma URL por linha = um bloco).
+  const [youtubeUrls, setYoutubeUrls] = useState("");
+  const [youtubeLicenca, setYoutubeLicenca] = useState("");
 
   // Sincronização com a VOZ do usuario (faster-whisper, local)
   const [transcribeLoading, setTranscribeLoading] = useState(false);
@@ -465,7 +468,9 @@ export default function NatoDarkStudio() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tema: scriptTema.trim() || selectedProject?.name || undefined,
-          fontes: ["pexels", "pixabay", "wikimedia"],
+          fontes: ["youtube", "pexels", "pixabay", "openverse", "wikimedia"],
+          youtube_urls: youtubeUrls.split("\n").map((u) => u.trim()).filter(Boolean),
+          youtube_licenca: youtubeLicenca.trim() || undefined,
           usar_gemini: true,
           max_blocos: 12
         })
@@ -1660,6 +1665,29 @@ export default function NatoDarkStudio() {
                             <><Sparkles className="w-3.5 h-3.5" /> Gerar Roteiro</>
                           )}
                         </button>
+
+                        <div className="border-t border-[#222] pt-2.5 flex flex-col gap-1.5">
+                          <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">
+                            Clipes do YouTube (opcional)
+                          </label>
+                          <textarea
+                            value={youtubeUrls}
+                            onChange={(e) => setYoutubeUrls(e.target.value)}
+                            placeholder={"Uma URL por bloco, na ordem do roteiro:\nhttps://youtube.com/watch?v=...\nhttps://youtu.be/...\n\nDeixe vazio para buscar automaticamente."}
+                            rows={3}
+                            className="bg-black border border-[#222] rounded p-2 text-[10px] text-white focus:outline-none focus:border-[#8B0000] w-full resize-none placeholder-gray-600"
+                          />
+                          <input
+                            value={youtubeLicenca}
+                            onChange={(e) => setYoutubeLicenca(e.target.value)}
+                            placeholder="Licença/autorização (opcional, vai para credits.json)"
+                            className="bg-black border border-[#222] rounded p-2 text-[10px] text-white focus:outline-none focus:border-[#8B0000] w-full placeholder-gray-600"
+                          />
+                          <p className="text-[9px] text-gray-600 leading-snug">
+                            YouTube vem primeiro. Use apenas clipes próprios ou autorizados;
+                            canal e URL entram em credits.json. Se falhar, cai para as outras fontes.
+                          </p>
+                        </div>
 
                         <button
                           onClick={handleAutoMedia}

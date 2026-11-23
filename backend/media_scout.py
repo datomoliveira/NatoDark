@@ -2,17 +2,19 @@
 Media Scout — busca e aplica mídia licenciada em cima do roteiro.
 
 Fontes (em ordem de preferencia):
-  1. Pexels   -> video/images gratis, chave gratuita PEXELS_API_KEY
-  2. Pixabay  -> video/images gratis, chave gratuita PIXABAY_API_KEY
-  3. Wikimedia Commons -> CC / dominio publico, SEM chave
+  1. YouTube  -> clipes via yt-dlp, SEM chave (URL colada ou busca ytsearch)
+  2. Pexels   -> video/images gratis, chave gratuita PEXELS_API_KEY
+  3. Pixabay  -> video/images gratis, chave gratuita PIXABAY_API_KEY
+  4. Openverse / Wikimedia Commons -> CC / dominio publico, SEM chave
+
+O download e o recorte do YouTube acontecem LOCALMENTE (youtube_clips.py);
+nada disso roda na Cloudflare. Use apenas videos proprios/autorizados e
+confira os creditos gravados em credits.json (canal, pagina e licenca).
 
 As queries de busca por bloco vem do router de LLMs (llm_router.py), entao
 funcionam com qualquer provedor configurado — nao so Gemini. Se nenhuma fonte
 responder, gera slides escuros com Pillow para a timeline nao ficar vazia.
 Sempre devolve creditos para atribuicao.
-
-Este modulo NAO baixa video do YouTube: usar clipes alheios de la e risco
-juridico (Content ID) e o mito dos "10 segundos" nao protege ninguem.
 """
 
 import html
@@ -26,6 +28,7 @@ import requests
 
 from compiler import get_media_duration
 from database import update_project_timeline
+import youtube_clips
 from storage import LOCAL_STORAGE_DIR, generate_download_url, upload_file
 
 TIMEOUT = (10, 25)
@@ -138,6 +141,48 @@ def _primeiro_valor(dados: dict, *chaves: str) -> str:
         if valor:
             return str(valor)
     return ""
+
+
+def _buscar_youtube(
+    query: str,
+    bloco: Dict[str, Any],
+    indice: int,
+    duracao: float,
+    temp_dir: str,
+) -> Optional[Dict[str, Any]]:
+    """Clipe do YouTube: URL colada no bloco ou busca por HTML (ytsearch)."""
+    if not youtube_clips.configurado():
+        print("[MediaScout] YouTube indisponivel (yt-dlp nao instalado).")
+        return None
+
+    url = str(bloco.get("youtube_url") or "").strip()
+    if not url:
+        candidatos = youtube_clips.buscar(query, limite=2)
+        if not candidatos:
+            return None
+        url = candidatos[0].get("url") or ""
+
+    inicio = float(bloco.get("youtube_inicio") or 0.0)
+    licenca = str(bloco.get("youtube_licenca") or youtube_clips.LICENCA_PADRAO)
+    nome = f"yt_{indice:02d}_{uuid.uuid4().hex[:6]}.mp4"
+    local = os.path.join(temp_dir, nome)
+    try:
+        meta = youtube_clips.baixar_clipe(
+            url, local, inicio=inicio, duracao=duracao, altura_max=720
+        )
+    except Exception as err:
+        print(f"[MediaScout] YouTube falhou: {err}")
+        return None
+
+    return {
+        "url": url,
+        "pagina": meta.get("pagina") or url,
+        "autor": meta.get("autor") or "Canal do YouTube",
+        "licenca": licenca,
+        "fonte": "YouTube",
+        "titulo": meta.get("titulo") or "",
+        "local": local,
+    }
 
 
 def _buscar_pexels(query: str, tipo: str, chave: str) -> Optional[Dict[str, str]]:
@@ -381,13 +426,13 @@ def build_auto_timeline(
     Busca midia para cada bloco e SUBSTITUI a timeline do projeto.
     Devolve relatorio com creditos de atribuicao.
     """
-    fontes = fontes or ["pexels", "pixabay", "openverse", "wikimedia"]
+    fontes = fontes or ["youtube", "pexels", "pixabay", "openverse", "wikimedia"]
     fontes = [
         f.lower() for f in fontes
-        if f.lower() in ("pexels", "pixabay", "openverse", "wikimedia")
+        if f.lower() in ("youtube", "pexels", "pixabay", "openverse", "wikimedia")
     ]
     if not fontes:
-        fontes = ["openverse", "wikimedia"]
+        fontes = ["youtube", "openverse", "wikimedia"]
 
     blocos = _blocos_do_roteiro(roteiro_json, script_texto)[: max(1, max_blocos)]
     if not blocos:
@@ -426,7 +471,11 @@ def build_auto_timeline(
 
         encontrado = None
         for fonte in fontes:
-            if fonte == "pexels":
+            if fonte == "youtube":
+                # Clipe do YouTube e sempre video; se falhar, cai para as outras fontes.
+                tipo = "video"
+                encontrado = _buscar_youtube(query, bloco, indice, duracao, temp_dir)
+            elif fonte == "pexels":
                 chave = os.environ.get("PEXELS_API_KEY")
                 if not chave:
                     continue
@@ -447,11 +496,16 @@ def build_auto_timeline(
 
         if encontrado:
             cache_de_urls.add(encontrado["url"])
-            ext = _extensao(encontrado["url"], tipo)
-            nome_arquivo = f"auto_{indice:02d}_{uuid.uuid4().hex[:6]}{ext}"
-            local = os.path.join(temp_dir, nome_arquivo)
-            if not _baixar(encontrado["url"], local):
-                encontrado = None
+            if encontrado.get("local") and os.path.isfile(encontrado["local"]):
+                # YouTube: yt-dlp + ffmpeg ja salvaram o recorte localmente.
+                local = encontrado["local"]
+                nome_arquivo = os.path.basename(local)
+            else:
+                ext = _extensao(encontrado["url"], tipo)
+                nome_arquivo = f"auto_{indice:02d}_{uuid.uuid4().hex[:6]}{ext}"
+                local = os.path.join(temp_dir, nome_arquivo)
+                if not _baixar(encontrado["url"], local):
+                    encontrado = None
 
         if not encontrado:
             tipo = "image"
@@ -528,7 +582,9 @@ def build_auto_timeline(
         "timeline": timeline,
         "arquivo_creditos": f"projects/{project_id}/media/credits.json",
         "dica": (
-            "Configure PEXELS_API_KEY e PIXABAY_API_KEY (gratuitas) para metragem real. "
-            "Sem elas, usa Wikimedia Commons e slides locais."
+            "YouTube vem primeiro (yt-dlp local, sem chave): cole uma URL por bloco "
+            "ou deixe a busca ytsearch decidir. Se falhar, cai para Pexels/Pixabay/"
+            "Openverse/Wikimedia e, no ultimo caso, slide local. Use apenas clipes "
+            "proprios ou autorizados — creditos em media/credits.json."
         ),
     }
