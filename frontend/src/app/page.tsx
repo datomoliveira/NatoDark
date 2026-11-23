@@ -468,7 +468,7 @@ export default function NatoDarkStudio() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tema: scriptTema.trim() || selectedProject?.name || undefined,
-          fontes: ["youtube", "pexels", "pixabay", "unsplash", "openverse", "wikimedia"],
+          fontes: ["youtube", "unsplash", "openverse", "wikimedia"],
           youtube_urls: youtubeUrls.split("\n").map((u) => u.trim()).filter(Boolean),
           youtube_licenca: youtubeLicenca.trim() || undefined,
           usar_gemini: true,

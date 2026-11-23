@@ -52,9 +52,9 @@ Secrets da Cloudflare (`wrangler secret put NOME`).
 | `OPENROUTER_API_KEY` **ou** `OPEN_ROUTER_API_KEY` | Gratuita com modelos `:free` | fallback | https://openrouter.ai/keys |
 | `OLLAMA_API_KEY` (opcional) | Gratuito/local | modelos locais ou Ollama Cloud | https://ollama.com/ |
 | `CF_ACCOUNT_ID` + `CF_API_TOKEN` | Gratuito | Workers AI (fallback) e deploy | painel Cloudflare; token com `Workers AI - Edit` |
-| `PEXELS_API_KEY` | Gratuita — melhora muito a mídia | busca de stock | https://www.pexels.com/api/ |
-| `PIXABAY_API_KEY` | Gratuita | segundo fallback de stock | https://pixabay.com/api/docs/ |
-| `UNSPLASH_ACCESS_KEY` | Gratuita (demo: 50 req/h) | fotos de stock (4º da fila) | https://unsplash.com/developers |
+| `PEXELS_API_KEY` | Serviço fora do ar — **não** usar por enquanto | legado | https://www.pexels.com/api/ |
+| `PIXABAY_API_KEY` | Serviço fora do ar — **não** usar por enquanto | legado | https://pixabay.com/api/docs/ |
+| `UNSPLASH_ACCESS_KEY` | Gratuita (demo: 50 req/h) — **também precisa no backend local** | fotos de stock (2º da fila) | https://unsplash.com/developers |
 | `API_TOKEN` | Recomendado | protege `/api` do Worker | gere um token forte você mesmo |
 | `YOUTUBE_API_KEY` | **Opcional** | análise dos **seus** vídeos (metadados/comentários); **não** é preciso para baixar clipes | Google Cloud Console |
 | `YOUTUBE_COOKIES_FILE` | Opcional | cookies locais se o YouTube exigir login (caminho de arquivo, **não** um Secret) | exportação do navegador |
@@ -64,19 +64,21 @@ Secrets da Cloudflare (`wrangler secret put NOME`).
 Sem **nenhuma** chave de IA, o router ainda tenta `ollama` local
 (`OLLAMA_URL`, `OLLAMA_MODEL`). Para mídia, **YouTube vem primeiro** via
 `yt-dlp` (sem chave: URL colada ou busca `ytsearch`); se falhar, segue
-**Pexels → Pixabay → Unsplash → Openverse → Wikimedia Commons** e slides locais, sempre
+**Unsplash → Openverse → Wikimedia Commons** e slides locais, sempre
 com `credits.json`. O download/recorte é local — nada disso roda na Cloudflare.
+Pexels e Pixabay ficaram fora do ar; continuam no código, mas saíram da fila padrão.
+A fila efetiva aparece em `GET http://localhost:8000/api/media/config`.
 
 ### Bancos de imagem/vídeo gratuitos — links exatos
 
 | Banco | Link da API / cadastro | Chave? | Uso aqui |
 |---|---|---|---|
 | YouTube | https://www.youtube.com/ · yt-dlp: https://github.com/yt-dlp/yt-dlp | **Não** | clipes como matéria-prima (1º da fila, download local) |
-| Pexels | API: https://www.pexels.com/api/ · cadastro: https://www.pexels.com/api/new/ | Sim, gratuita | vídeos e fotos (2º da fila) |
-| Pixabay | Docs: https://pixabay.com/api/docs/ · conta: https://pixabay.com/accounts/ | Sim, gratuita | vídeos e fotos (3º da fila) |
-| Openverse | API: https://api.openverse.org/v1/images/ · busca: https://openverse.org/ | **Não** | fotos CC/public domain (4º da fila) |
-| Wikimedia Commons | API: https://commons.wikimedia.org/w/api.php | **Não** | fotos e vídeos (5º da fila) |
-| Unsplash | API: https://unsplash.com/developers · cadastro: https://unsplash.com/oauth/applications | Sim, gratuita (Access Key) | fotos (4º da fila) |
+| Pexels | API: https://www.pexels.com/api/ · cadastro: https://www.pexels.com/api/new/ | Sim, gratuita | **fora do ar** — legado |
+| Pixabay | Docs: https://pixabay.com/api/docs/ · conta: https://pixabay.com/accounts/ | Sim, gratuita | **fora do ar** — legado |
+| Openverse | API: https://api.openverse.org/v1/images/ · busca: https://openverse.org/ | **Não — confirmado HTTP 200 sem chave** | fotos CC/public domain (3º da fila) |
+| Wikimedia Commons | API: https://commons.wikimedia.org/w/api.php | **Não** | fotos e vídeos (4º da fila) |
+| Unsplash | API: https://unsplash.com/developers · cadastro: https://unsplash.com/oauth/applications | Sim, gratuita (Access Key) | fotos (2º da fila) |
 
 ### Clipes do YouTube (matéria-prima)
 
@@ -99,10 +101,11 @@ não mudam porque o trecho é curto; canal, título, URL e licença informada s�
 gravados em `projects/<id>/media/credits.json`. Se o YouTube pedir login,
 defina `YOUTUBE_COOKIES_FILE` no seu computador (nunca na Cloudflare).
 
-Para pegar a chave da Pixabay: crie conta em `pixabay.com/accounts/`, entre em
-**Account settings → API**, copie a chave e cole em `PIXABAY_API_KEY`.
-A da Pexels: `pexels.com/api/new/` → preencha o formulário → copie em
-`PEXELS_API_KEY`. Se o site estiver fora, use Openverse/Wikimedia — não travam.
+Openverse não pede chave nem cadastro: a API
+`https://api.openverse.org/v1/images/` respondeu `200` sem autenticação. É só
+deixar `openverse` na lista de fontes (já vem no default) — fotos CC/public
+domain com autor e licença gravados no `credits.json`. Wikimedia Commons também
+é sem chave e cobre vídeo. Pexels/Pixabay estão fora do ar, então não perca tempo.
 
 Para pegar a **Access Key do Unsplash**: abra
 `https://unsplash.com/oauth/applications` → **New Application** → aceite as
@@ -121,6 +124,30 @@ diretrizes da API → preencha nome e descrição.
 - O app começa em **demo mode** (50 req/h). Se virar produção, peça o aumento
   para 1000 req/h no próprio painel do app. Respeite a atribuição e mantenha o
   parâmetro `ixid` nas URLs do CDN.
+- ⚠️ O `media_scout` roda no **backend Python local**, não na Cloudflare. O
+  Secret do Pages é usado só pelas rotas de IA (`/api/providers`,
+  `/api/scripts/generate`). Para o Unsplash ser usado de fato, coloque a chave
+  **também** em `backend/.env` (gitignored):
+  `UNSPLASH_ACCESS_KEY=...` e reinicie o uvicorn. Confira com
+  `curl -s http://localhost:8000/api/media/config`.
+
+### Chave de API do YouTube (opcional)
+
+Para **baixar clipes** você **não precisa** de API key — o `yt-dlp` busca por
+HTML e faz o download local. A API oficial só serve para metadados/análise dos
+**seus** vídeos e para hype com cota. Se quiser:
+
+1. Abra https://console.cloud.google.com/ e crie/selecione um projeto.
+2. **APIs & Services → Library** → busque **YouTube Data API v3** → **Enable**.
+3. **APIs & Services → Credentials → Create credentials → API key**.
+4. Na chave criada, em **Application restrictions**, escolha **IP addresses**
+   e coloque o IP da máquina que roda o backend (ou **None** só para teste).
+   Em **API restrictions**, marque **Restrict key → YouTube Data API v3**.
+5. Copie a chave para `YOUTUBE_API_KEY` (ou `YOUTUBE_DATA_API_KEY`) no
+   `backend/.env` local. O alias `YOUTUBE_API_KEY / YOUTUBE_DATA_API_KEY` aparece
+   em `GET /api/youtube/config`.
+6. Cota padrão: 10.000 unidades/dia; uma busca `search.list` custa 100 unidades.
+   O gráfico de retenção **não** existe nessa API — só no YouTube Studio.
 
 ### Provedores extras do awesome-free-llm-apis
 

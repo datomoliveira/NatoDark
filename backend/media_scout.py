@@ -3,10 +3,10 @@ Media Scout — busca e aplica mídia licenciada em cima do roteiro.
 
 Fontes (em ordem de preferencia):
   1. YouTube  -> clipes via yt-dlp, SEM chave (URL colada ou busca ytsearch)
-  2. Pexels   -> video/images gratis, chave gratuita PEXELS_API_KEY
-  3. Pixabay  -> video/images gratis, chave gratuita PIXABAY_API_KEY
-  4. Unsplash -> fotos, chave gratuita UNSPLASH_ACCESS_KEY
-  5. Openverse / Wikimedia Commons -> CC / dominio publico, SEM chave
+  2. Unsplash -> fotos, chave gratuita UNSPLASH_ACCESS_KEY (local)
+  3. Openverse / Wikimedia Commons -> CC / dominio publico, SEM chave
+  Pexels e Pixabay continuam suportados se as chaves estiverem definidas,
+  mas nao vem mais no default (os servicos estao fora do ar).
 
 O download e o recorte do YouTube acontecem LOCALMENTE (youtube_clips.py);
 nada disso roda na Cloudflare. Use apenas videos proprios/autorizados e
@@ -367,35 +367,47 @@ def _buscar_openverse(query: str, tipo: str) -> Optional[Dict[str, str]]:
     """
     if tipo != "image":
         return None
-    try:
-        r = requests.get(
-            "https://api.openverse.org/v1/images/",
-            headers=HEADERS,
-            params={
-                "q": query,
-                "page_size": 10,
-                "license": "cc0,pdm,by,by-sa",
-                "mature": "false",
-            },
-            timeout=TIMEOUT,
-        )
-        if r.status_code != 200:
-            return None
-        for item in ((r.json() or {}).get("results") or []):
-            url = item.get("url") or item.get("thumbnail")
-            if not url:
+    # A Openverse e literal: "aviao sobre o mar" devolve 0, mas "aviao" acha
+    # centenas. Tenta a frase, depois as palavras-chave, depois so a primeira.
+    tentativas = [query]
+    palavras = [
+        p for p in re.split(r"\s+", query.strip())
+        if p and p.lower() not in STOPWORDS
+    ]
+    if len(palavras) > 2:
+        tentativas.append(" ".join(palavras[:2]))
+    if len(palavras) > 1:
+        tentativas.append(palavras[0])
+
+    for termo in dict.fromkeys(tentativas):
+        try:
+            r = requests.get(
+                "https://api.openverse.org/v1/images/",
+                headers=HEADERS,
+                params={
+                    "q": termo,
+                    "page_size": 10,
+                    "license": "cc0,pdm,by,by-sa",
+                    "mature": "false",
+                },
+                timeout=TIMEOUT,
+            )
+            if r.status_code != 200:
                 continue
-            return {
-                "url": url,
-                "pagina": item.get("foreign_landing_url") or item.get("source") or "",
-                "autor": _limpar_texto(item.get("creator") or "Autor na Openverse"),
-                "licenca": (item.get("license") or "Ver pagina (Openverse)").upper(),
-                "fonte": "Openverse",
-            }
-        return None
-    except Exception as err:
-        print(f"[MediaScout] Openverse falhou: {err}")
-        return None
+            for item in ((r.json() or {}).get("results") or []):
+                url = item.get("url") or item.get("thumbnail")
+                if not url:
+                    continue
+                return {
+                    "url": url,
+                    "pagina": item.get("foreign_landing_url") or item.get("source") or "",
+                    "autor": _limpar_texto(item.get("creator") or "Autor na Openverse"),
+                    "licenca": (item.get("license") or "Ver pagina (Openverse)").upper(),
+                    "fonte": "Openverse",
+                }
+        except Exception as err:
+            print(f"[MediaScout] Openverse falhou ({termo}): {err}")
+    return None
 
 
 def _extensao(url: str, tipo: str) -> str:
@@ -470,13 +482,13 @@ def build_auto_timeline(
     Busca midia para cada bloco e SUBSTITUI a timeline do projeto.
     Devolve relatorio com creditos de atribuicao.
     """
-    fontes = fontes or ["youtube", "pexels", "pixabay", "unsplash", "openverse", "wikimedia"]
+    fontes = fontes or ["youtube", "unsplash", "openverse", "wikimedia"]
     fontes = [
         f.lower() for f in fontes
-        if f.lower() in ("youtube", "pexels", "pixabay", "unsplash", "openverse", "wikimedia")
+        if f.lower() in ("youtube", "unsplash", "openverse", "wikimedia", "pexels", "pixabay")
     ]
     if not fontes:
-        fontes = ["youtube", "unsplash", "openverse", "wikimedia"]
+        fontes = ["youtube", "openverse", "wikimedia"]
 
     blocos = _blocos_do_roteiro(roteiro_json, script_texto)[: max(1, max_blocos)]
     if not blocos:
@@ -536,6 +548,7 @@ def build_auto_timeline(
                 tipo = "image"  # Unsplash e banco de fotos: entra como still.
                 encontrado = _buscar_unsplash(query, chave)
             elif fonte == "openverse":
+                tipo = "image"  # Openverse e so imagem: entra como still.
                 encontrado = _buscar_openverse(query, tipo)
             else:
                 encontrado = _buscar_wikimedia(query, tipo)

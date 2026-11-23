@@ -229,7 +229,7 @@ class ScriptGenerateRequest(BaseModel):
 
 class AutoMediaRequest(BaseModel):
     tema: Optional[str] = None
-    fontes: List[str] = ["youtube", "pexels", "pixabay", "unsplash", "openverse", "wikimedia"]
+    fontes: List[str] = ["youtube", "unsplash", "openverse", "wikimedia"]
     youtube_urls: Optional[List[str]] = None  # uma URL por bloco; vazia = busca ytsearch
     youtube_licenca: Optional[str] = None
     usar_gemini: bool = True
@@ -624,6 +624,32 @@ def youtube_config():
         "observacao": (
             "A API nao expoe o grafico de retencao; isso so existe no YouTube Studio. "
             "A pesquisa de hype continua usando HTML do navegador, sem cota."
+        ),
+    }
+
+@app.get("/api/media/config")
+def media_config():
+    """
+    Mostra quais fontes de midia estao disponiveis no BACKEND LOCAL (sem expor valores).
+    Secrets do Cloudflare nao aparecem aqui: o download/render e local.
+    """
+    return {
+        "fontes_default": ["youtube", "unsplash", "openverse", "wikimedia"],
+        "sem_chave": ["youtube", "openverse", "wikimedia"],
+        "chaves_locais": {
+            nome: bool(os.environ.get(nome, "").strip())
+            for nome in (
+                "UNSPLASH_ACCESS_KEY",
+                "PEXELS_API_KEY",
+                "PIXABAY_API_KEY",
+                "YOUTUBE_API_KEY",
+                "YOUTUBE_DATA_API_KEY",
+            )
+        },
+        "observacao": (
+            "UNSPLASH_ACCESS_KEY precisa existir no ambiente do backend local "
+            "(backend/.env) para o auto-scout usar; Secret do Pages serve para "
+            "as rotas de IA nao para o download de midia."
         ),
     }
 
