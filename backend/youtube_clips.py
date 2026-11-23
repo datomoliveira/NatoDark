@@ -33,6 +33,27 @@ def _ffmpeg_bin() -> str:
     return imageio_ffmpeg.get_ffmpeg_exe()
 
 
+def _ffmpeg_location() -> str:
+    """
+    yt-dlp procura um executável chamado `ffmpeg`. O imageio-ffmpeg instala
+    `ffmpeg-linux-x86_64-vX`, então criamos um symlink com o nome esperado.
+    """
+    destino = os.path.join(tempfile.gettempdir(), "natodark_ffmpeg_bin")
+    os.makedirs(destino, exist_ok=True)
+    link = os.path.join(destino, "ffmpeg")
+    if not os.path.exists(link):
+        try:
+            os.symlink(_ffmpeg_bin(), link)
+        except OSError:
+            # Em sistemas sem symlink, o fallback é o diretório original.
+            return os.path.dirname(_ffmpeg_bin())
+    # O yt-dlp checa `ffmpeg` na PATH (ignora ffmpeg_location nessa checagem).
+    caminho = os.environ.get("PATH", "")
+    if destino not in caminho.split(os.pathsep):
+        os.environ["PATH"] = destino + os.pathsep + caminho
+    return destino
+
+
 def _opcoes_base(skip_download: bool = True) -> Dict[str, Any]:
     opcoes: Dict[str, Any] = {
         "quiet": True,
@@ -40,7 +61,7 @@ def _opcoes_base(skip_download: bool = True) -> Dict[str, Any]:
         "noplaylist": True,
         "skip_download": skip_download,
         "retries": 2,
-        "ffmpeg_location": os.path.dirname(_ffmpeg_bin()),
+        "ffmpeg_location": _ffmpeg_location(),
     }
     cookie = os.environ.get("YOUTUBE_COOKIES_FILE", "").strip()
     if cookie and os.path.isfile(cookie):
@@ -131,7 +152,10 @@ def baixar_clipe(
             }
         )
         if inicio > 0 or duracao > 0:
-            opcoes["download_ranges"] = lambda info_dict, ydl: [(inicio, fim)]
+            # Formato exigido pelo yt-dlp 2026: lista de dicts start_time/end_time.
+            opcoes["download_ranges"] = lambda info_dict, ydl: [
+                {"start_time": inicio, "end_time": fim}
+            ]
             opcoes["force_keyframes_at_cuts"] = True
 
         with yt_dlp.YoutubeDL(opcoes) as ydl:
