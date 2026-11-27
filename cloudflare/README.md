@@ -14,9 +14,11 @@ e sem expor chave na API.
 | Clipes do YouTube (yt-dlp + recorte) | backend local ✅ | Workers não têm yt-dlp nem ffmpeg |
 | Buscar stock (Pexels/Pixabay/Openverse/Wikimedia) | backend local ✅ | Precisa das chaves de stock e storage |
 | Cortar/compilar com ffmpeg | **local / VPS** ❌ no Worker | Workers têm 10 ms de CPU no plano free, 128 MB de memória e nenhum binário ffmpeg |
+| Detecção de cenas, crop com rosto, HyperFrames e ML (YuNet/WhisperX/BEN2/etc.) | backend local ✅ | São binários/pesos e uso de CPU/disco; não cabem no Worker |
 
 Ou seja: você adiantar o **roteiro remoto**; a renderização pesada continua no
-seu computador (ou numa VPS/Containers, se quiser evoluir depois).
+seu computador (ou numa VPS/Containers, se quiser evoluir depois). Catálogo e
+licenças em `docs/FERRAMENTAS.md`.
 
 ## 1. Instalar e logar
 

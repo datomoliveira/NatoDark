@@ -9,6 +9,7 @@ boto3
 pillow
 pydantic
 python-dotenv
+scenedetect-headless
 google-genai
 requests
 anthropic

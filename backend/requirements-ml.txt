@@ -1,0 +1,42 @@
+# NatoDark — recursos ML PESADOS (OPCIONAIS)
+#
+# NÃO instale isto por padrão. O start_backend.bat instala apenas
+# requirements.txt (leve, CPU, sempre gratuito).
+#
+# Instale só se a máquina tiver RAM/SSD sobrando (e de preferência GPU).
+# Nada disso roda na Cloudflare: é tudo backend local.
+#
+#   backend/.venv/Scripts/pip.exe install -r requirements-ml.txt   (Windows)
+#   backend/.venv/bin/pip install -r requirements-ml.txt           (Linux/Mac)
+#
+# Depois ligue o que quiser em backend/.env:
+#   NATODARK_USE_WHISPERX=1
+#   RENDER_ENGINE=hyperframes
+#   NATODARK_ENABLE_DEMUCS=1   (NÃO recomendado: licença dos pesos é duvidosa)
+
+# Transcrição com alinhamento forçado de palavras (BSD-2-Clause)
+whisperx>=3.8
+
+# Visão leve em CPU (Apache-2.0)
+mediapipe>=0.10
+
+# Recorte de fundo — modelo Base MIT, ~363 MB de pesos no Hugging Face
+git+https://github.com/PramaLLC/BEN2.git#egg=ben2
+
+# Profundidade — use SOMENTE o Small (Apache-2.0).
+# Base/Large são CC-BY-NC-4.0: proibidos em vídeo monetizado.
+transformers>=4.51
+accelerate>=1.0
+safetensors>=0.4
+
+# Similaridade áudio<->texto (CC0), bem pesado (torch + librosa)
+laion-clap>=1.1
+
+# O torch vem como dependência dos pacotes acima. Em máquina sem GPU,
+# o código cai automaticamente para CPU e fica LENTO — use com moderação.
+
+# SAM 2 (Apache-2.0) NÃO entra aqui: precisa clonar o repo e compilar a
+# extensão CUDA. Ver docs/FERRAMENTAS.md antes de instalar.
+
+# Demucs (código MIT, pesos sem licença clara) fica FORA de propósito.
+# Se ainda assim quiser: pip install demucs e NATODARK_ENABLE_DEMUCS=1.

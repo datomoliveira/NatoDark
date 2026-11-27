@@ -4,6 +4,7 @@ import subprocess
 import json
 import shutil
 from datetime import datetime
+from typing import List
 import imageio_ffmpeg
 from database import (
     get_project, update_project_status, 
@@ -97,6 +98,159 @@ def generate_srt(script_text: str, seconds_per_block: float, dest_path: str) -> 
             
     return True
 
+def _filtro_padrao(width: int, height: int) -> str:
+    """Enquadramento atual: reduz e faz letterbox, sem perder nada da imagem."""
+    return (
+        f"scale=w={width}:h={height}:force_original_aspect_ratio=decrease,"
+        f"pad=w={width}:h={height}:x=(ow-iw)/2:y=(oh-ih)/2:color=black,setsar=1"
+    )
+
+
+def _filtro_enquadramento(
+    caminho: str,
+    width: int,
+    height: int,
+    *,
+    eh_video: bool,
+    trim_start: float,
+    duracao: float,
+    ffmpeg_exe: str,
+    workdir: str,
+    project_id: str,
+) -> str:
+    """
+    Crop que mantem o rosto no terco superior (YuNet, CPU).
+    Se OpenCV/modelo/PIL falharem, volta para o scale+pad original.
+    """
+    padrao = _filtro_padrao(width, height)
+    if os.environ.get("NATODARK_SMART_CROP", "1").strip().lower() in ("0", "false", "no"):
+        return padrao
+    try:
+        from PIL import Image
+        from local_tools import caixa_de_crop
+
+        quadro = caminho
+        if eh_video:
+            quadro = os.path.join(workdir, "crop_frame.png")
+            meio = max(0.0, trim_start + max(0.0, duracao) / 2)
+            res = subprocess.run(
+                [
+                    ffmpeg_exe, "-y", "-loglevel", "error",
+                    "-ss", f"{meio:.2f}", "-i", caminho,
+                    "-frames:v", "1", quadro,
+                ],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            if res.returncode != 0 or not os.path.isfile(quadro):
+                raise RuntimeError("nao foi possivel extrair quadro para o crop")
+
+        with Image.open(quadro) as imagem:
+            largura, altura = imagem.size
+        x0, y0, x1, y1 = caixa_de_crop(quadro, largura, altura, width / height)
+        crop_w, crop_h = x1 - x0, y1 - y0
+        if crop_w < 2 or crop_h < 2:
+            raise RuntimeError("crop invalido")
+        log_compile(
+            project_id,
+            f"YuNet: crop inteligente {crop_w}x{crop_h} (origem {largura}x{altura})",
+        )
+        return f"crop=w={crop_w}:h={crop_h}:x={x0}:y={y0},scale=w={width}:h={height},setsar=1"
+    except Exception as err:
+        log_compile(project_id, f"Crop inteligente indisponivel; usando scale+pad: {err}")
+        return padrao
+
+
+def _renderizar_hyperframes(
+    project_id: str,
+    itens: List[dict],
+    temp_dir: str,
+    destino: str,
+    width: int,
+    height: int,
+) -> bool:
+    """
+    Render local com HyperFrames (Apache-2.0, sem watermark, sem conta).
+    Retorna False para o chamador usar o concat ffmpeg padrao.
+    """
+    try:
+        raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        gerador = os.path.join(raiz, "renderer", "generate.mjs")
+        cli = os.path.join(raiz, "renderer", "node_modules", ".bin", "hyperframes")
+        if not (os.path.isfile(gerador) and os.path.isfile(cli)):
+            log_compile(project_id, "HyperFrames nao instalado (npm install --prefix renderer).")
+            return False
+        if not shutil.which("node"):
+            log_compile(project_id, "Node.js ausente; HyperFrames ignorado.")
+            return False
+
+        projeto_hf = os.path.join(temp_dir, "hyperframes")
+        os.makedirs(projeto_hf, exist_ok=True)
+        spec_path = os.path.join(projeto_hf, "spec.json")
+        with open(spec_path, "w", encoding="utf-8") as fh:
+            json.dump(
+                {
+                    "width": width,
+                    "height": height,
+                    "fps": 30,
+                    "items": [
+                        {
+                            "path": item["path"],
+                            "type": item.get("type", "video"),
+                            "duration": item.get("duration", 5.0),
+                        }
+                        for item in itens
+                    ],
+                },
+                fh,
+            )
+
+        res = subprocess.run(
+            ["node", gerador, spec_path, projeto_hf],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        if res.returncode != 0:
+            log_compile(project_id, f"HyperFrames: falha ao gerar composicao: {res.stderr}")
+            return False
+
+        env = os.environ.copy()
+        env.update({
+            "HYPERFRAMES_NO_UPDATE_CHECK": "1",
+            "HYPERFRAMES_SKIP_SKILLS": "1",
+            "HYPERFRAMES_NO_TELEMETRY": "1",
+        })
+        if not env.get("HYPERFRAMES_BROWSER_PATH"):
+            for navegador in ("google-chrome", "chromium", "chromium-browser"):
+                encontrado = shutil.which(navegador)
+                if encontrado:
+                    env["HYPERFRAMES_BROWSER_PATH"] = encontrado
+                    break
+        # HyperFrames precisa de ffmpeg e ffprobe no PATH. O imageio-ffmpeg so
+        # traz o ffmpeg; NATODARK_HYPERFRAMES_BIN pode apontar para um dir com os dois.
+        bin_dir = os.environ.get("NATODARK_HYPERFRAMES_BIN", "").strip()
+        if bin_dir:
+            env["PATH"] = bin_dir + os.pathsep + env.get("PATH", "")
+        elif not shutil.which("ffprobe"):
+            env["PATH"] = os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe()) + os.pathsep + env.get("PATH", "")
+
+        cmd = [
+            cli, "render", projeto_hf, "--output", destino,
+            "--quality", env.get("HYPERFRAMES_QUALITY", "draft"),
+        ]
+        log_compile(project_id, "Renderizando com HyperFrames (local, gratuito)...")
+        res = subprocess.run(cmd, cwd=projeto_hf, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if res.returncode != 0 or not os.path.isfile(destino):
+            log_compile(project_id, f"HyperFrames falhou; usando ffmpeg: {res.stderr[-1200:]}")
+            return False
+        if get_media_duration(destino) <= 0:
+            log_compile(project_id, "HyperFrames gerou arquivo sem duracao; usando ffmpeg.")
+            return False
+        log_compile(project_id, "HyperFrames concluiu o render da timeline.")
+        return True
+    except Exception as err:
+        log_compile(project_id, f"HyperFrames indisponivel; usando ffmpeg: {err}")
+        return False
+
+
 # Compile single project process
 def compile_project_pipeline(project_id: str) -> str:
     """
@@ -139,6 +293,7 @@ def compile_project_pipeline(project_id: str) -> str:
         
         # 1. Download and normalize timeline clips
         normalized_paths = []
+        normalized_itens: List[dict] = []
         for idx, item in enumerate(timeline):
             item_id = item.get("id", f"clip_{idx}")
             item_type = item.get("type", "video") # 'video' or 'image'
@@ -162,9 +317,11 @@ def compile_project_pipeline(project_id: str) -> str:
             
             if item_type == "image":
                 log_compile(project_id, f"Convertendo imagem estática em vídeo (Duração: {duration}s)")
-                # Normalize image to video
-                # Scale & pad filter
-                vf_filter = f"scale=w={width}:h={height}:force_original_aspect_ratio=decrease,pad=w={width}:h={height}:x=(ow-iw)/2:y=(oh-ih)/2:color=black,setsar=1"
+                vf_filter = _filtro_enquadramento(
+                    local_in_path, width, height,
+                    eh_video=False, trim_start=0.0, duracao=duration,
+                    ffmpeg_exe=ffmpeg_exe, workdir=inputs_dir, project_id=project_id,
+                )
                 cmd = [
                     ffmpeg_exe, "-y",
                     "-loop", "1",
@@ -179,8 +336,13 @@ def compile_project_pipeline(project_id: str) -> str:
             else:
                 log_compile(project_id, f"Normalizando clipe de vídeo {idx+1} (Trim Start: {trim_start}s, Trim End: {trim_end}s)")
                 # Normalize video clip (trim, remove audio, adjust format)
-                vf_filter = f"scale=w={width}:h={height}:force_original_aspect_ratio=decrease,pad=w={width}:h={height}:x=(ow-iw)/2:y=(oh-ih)/2:color=black,setsar=1"
-                
+                vf_filter = _filtro_enquadramento(
+                    local_in_path, width, height,
+                    eh_video=True, trim_start=trim_start,
+                    duracao=(trim_end - trim_start) if trim_end > trim_start else duration,
+                    ffmpeg_exe=ffmpeg_exe, workdir=inputs_dir, project_id=project_id,
+                )
+
                 cmd = [ffmpeg_exe, "-y"]
                 if trim_start > 0:
                     cmd.extend(["-ss", f"{trim_start:.2f}"])
@@ -206,31 +368,47 @@ def compile_project_pipeline(project_id: str) -> str:
                 raise RuntimeError(f"Falha ao normalizar clipe {idx+1}")
                 
             normalized_paths.append(local_norm_path)
-            
-        # 2. Concatenate normalized clips
-        log_compile(project_id, "Concatenando clipes da timeline...")
-        list_file_path = os.path.join(temp_dir, "list.txt")
-        with open(list_file_path, "w", encoding="utf-8") as lf:
-            for path in normalized_paths:
-                # Use relative paths for safety with spaces
-                lf.write(f"file 'normalized/{os.path.basename(path)}'\n")
-                
+            duracao_normalizada = (
+                (trim_end - trim_start)
+                if item_type == "video" and trim_end > trim_start
+                else duration
+            )
+            # Todos os normalizados sao MP4 sem audio — o HyperFrames so os sequencia.
+            normalized_itens.append({
+                "path": local_norm_path,
+                "type": "video",
+                "duration": max(0.04, duracao_normalizada),
+            })
+
+        # 2. Concatenate normalized clips (HyperFrames e o engine preferido;
+        #    cai para o concat demuxer do ffmpeg se ele nao estiver disponivel).
         concat_video_path = os.path.join(temp_dir, "concatenated.mp4")
-        
-        # Execute concatenation using concat demuxer
-        # Run in temp_dir context
-        cmd = [
-            ffmpeg_exe, "-y",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", "list.txt",
-            "-c", "copy",
-            "concatenated.mp4"
-        ]
-        res = subprocess.run(cmd, cwd=temp_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if res.returncode != 0:
-            log_compile(project_id, f"Erro de concatenação: {res.stderr}")
-            raise RuntimeError("Falha ao concatenar clipes.")
+        usou_hyperframes = False
+        if os.environ.get("RENDER_ENGINE", "ffmpeg").strip().lower() == "hyperframes":
+            usou_hyperframes = _renderizar_hyperframes(
+                project_id, normalized_itens, temp_dir, concat_video_path, width, height
+            )
+
+        if not usou_hyperframes:
+            log_compile(project_id, "Concatenando clipes da timeline com ffmpeg...")
+            list_file_path = os.path.join(temp_dir, "list.txt")
+            with open(list_file_path, "w", encoding="utf-8") as lf:
+                for path in normalized_paths:
+                    # Use relative paths for safety with spaces
+                    lf.write(f"file 'normalized/{os.path.basename(path)}'\n")
+
+            cmd = [
+                ffmpeg_exe, "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", "list.txt",
+                "-c", "copy",
+                "concatenated.mp4"
+            ]
+            res = subprocess.run(cmd, cwd=temp_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if res.returncode != 0:
+                log_compile(project_id, f"Erro de concatenação: {res.stderr}")
+                raise RuntimeError("Falha ao concatenar clipes.")
             
         video_dur = get_media_duration(concat_video_path)
         log_compile(project_id, f"Concatenação finalizada. Duração do vídeo: {video_dur:.2f}s")

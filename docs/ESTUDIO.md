@@ -14,7 +14,7 @@ Guia único de configuração e operação. Tudo em pt-BR.
                   │  1. roteiro (router)   2. hype (HTML)      │
                   │  3. sua VOZ → Whisper → SRT sincronizado   │
                   │  4. mídia: YouTube (yt-dlp) → stock → CC
-                  │  5. ffmpeg local → final.mp4               │
+                  │  5. ffmpeg/HyperFrames local → final.mp4               │
                   └────────────────────────────────────────────┘
 ```
 
@@ -224,8 +224,9 @@ nuvem, que hoje não tem créditos nesta conta.
    distribuída, pattern interrupt, cliffhanger, loop e CTA. Regras de âncora e
    título incluídas no prompt.
 3. **Buscar e aplicar mídia** → uma cena por bloco. Cole as URLs do YouTube
-   (ou deixe a busca automática): YouTube → Pexels → Pixabay → Openverse →
-   Wikimedia → slide local. Créditos em `credits.json`.
+   (ou deixe a busca automática): YouTube → Unsplash → Openverse → Wikimedia →
+   slide local. PySceneDetect ajusta o fim do clipe a uma cena completa e YuNet
+   evita cortar o rosto no crop 9:16. Créditos em `credits.json`.
 4. **Enviar sua voz** na aba de áudio → **Sincronizar com minha voz**: o
    faster-whisper gera SRT com timestamps reais, alinha os blocos e grava
    `subtitle_style.srt_key`. O compiler prefere esse SRT ao estimado por
@@ -279,11 +280,31 @@ Detalhes, R2 opcional e exemplos de `curl` em `cloudflare/README.md`.
   padrão "write-then-execute" com dados controlados pelo usuário (URL → `.tsx`
   → `bunx remotion`). Risco desnecessário para o que precisamos.
 
+## Ferramentas locais (WhisperX, YuNet, HyperFrames e outras)
+
+A análise completa de viabilidade, licença, custo e hardware está em
+`docs/FERRAMENTAS.md`. Resumo operacional:
+
+- `GET /api/tools` mostra o que está realmente instalado e se cada ferramenta
+  é efetiva no canal monetizado.
+- **Ativas**: FFmpeg, PySceneDetect (cenas) e YuNet (crop com rosto).
+- **Engine de render**: `RENDER_ENGINE=ffmpeg` (padrão) ou `hyperframes`.
+  Para usar o HyperFrames: `npm install --prefix renderer` e reiniciar o backend.
+  Render local gratuito, Apache-2.0, sem watermark; se faltar Chrome/ffprobe,
+  o compiler volta para o ffmpeg sozinho.
+- **Opcionais pesadas** (`backend/requirements-ml.txt`): WhisperX, MediaPipe,
+  BEN2, Depth Anything **Small**, CLAP e SAM 2 (este último exige GPU).
+- **Desligadas por licença**: Demucs (pesos sem licença clara) e Depth Anything
+  Base/Large (CC-BY-NC). Não usar em vídeo monetizado.
+
 ## Validação executada
 
-- `py_compile` + `import main`: OK — **33 rotas** API.
+- `py_compile` + `import main`: OK — **38 rotas** API.
 - `gerar_srt` e `alinhar_blocos`: teste com falas reais, confiança 1.0.
 - `WhisperModel('small', cpu, int8)`: carregado OK.
 - `npm run build --prefix frontend`: OK (Next 16.4.6, TypeScript limpo).
 - `npm run typecheck --prefix cloudflare`: OK (`tsc --noEmit`).
 - `npm audit`: 0 vulnerabilidades.
+- PySceneDetect, YuNet e HyperFrames: testados de ponta a ponta; compile com
+  `RENDER_ENGINE=hyperframes` gerou `final.mp4` com legenda e narração (fallback
+  automático para ffmpeg se faltar Chrome/ffprobe).

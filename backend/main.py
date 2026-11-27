@@ -39,6 +39,7 @@ from transcriber import sincronizar_projeto
 from hype_research import pesquisar_hype
 import youtube_api
 import youtube_clips
+import local_tools
 
 # Sequential background job queue
 compilation_queue = asyncio.Queue()
@@ -233,6 +234,7 @@ class AutoMediaRequest(BaseModel):
     youtube_urls: Optional[List[str]] = None  # uma URL por bloco; vazia = busca ytsearch
     youtube_licenca: Optional[str] = None
     usar_gemini: bool = True
+    usar_cenas: bool = True  # PySceneDetect: evita cortar no meio de uma cena
     max_blocos: int = 12
 
 class TranscribeRequest(BaseModel):
@@ -526,8 +528,9 @@ def generate_script_endpoint(body: ScriptGenerateRequest):
 def auto_media(id: str, body: AutoMediaRequest):
     """
     Busca midia para cada bloco do roteiro e monta a timeline.
-    Prioridade: YouTube (yt-dlp local) -> Pexels -> Pixabay -> Openverse ->
+    Prioridade: YouTube (yt-dlp local) -> Unsplash -> Openverse ->
     Wikimedia -> slide local. Use apenas clipes proprios/autorizados.
+    Quando disponivel, PySceneDetect alinha o corte ao limite de cena.
     """
     projeto = get_project(id)
     if not projeto:
@@ -563,6 +566,7 @@ def auto_media(id: str, body: AutoMediaRequest):
             tema=body.tema or projeto.get("name", ""),
             fontes=body.fontes,
             usar_gemini=body.usar_gemini,
+            usar_cenas=body.usar_cenas,
             max_blocos=body.max_blocos,
         )
     except (ValueError, RuntimeError) as err:
@@ -652,6 +656,14 @@ def media_config():
             "as rotas de IA nao para o download de midia."
         ),
     }
+
+@app.get("/api/tools")
+def tools_status():
+    """
+    Ferramentas locais disponiveis (backend), com licenca/custo e estado real.
+    Nao expoe chaves, tokens nem caminhos de arquivos sensiveis.
+    """
+    return local_tools.status()
 
 @app.get("/api/youtube/clips/search")
 def youtube_clips_search(q: str, limite: int = 3):

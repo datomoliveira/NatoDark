@@ -5,6 +5,13 @@ backend/temp/
 backend/storage/
 backend/natodark.db
 backend/temp_test_assets/
+# Modelos baixados sob demanda (YuNet, Whisper, etc.) — nunca versionar pesos
+backend/.cache/
+
+# Render local (HyperFrames)
+renderer/node_modules/
+renderer/renders/
+renderer/.hyperframes/
 
 # Cloudflare Worker
 cloudflare/node_modules/

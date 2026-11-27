@@ -476,6 +476,7 @@ def build_auto_timeline(
     tema: str = "",
     fontes: Optional[List[str]] = None,
     usar_gemini: bool = True,
+    usar_cenas: bool = True,
     max_blocos: int = 12,
 ) -> Dict[str, Any]:
     """
@@ -508,6 +509,7 @@ def build_auto_timeline(
     timeline = []
     creditos = []
     usadas = set()
+    total_cenas = 0
 
     for indice, bloco in enumerate(blocos):
         sugestao = (
@@ -586,9 +588,31 @@ def build_auto_timeline(
 
         trim_start = 0.0
         trim_end = 0.0
+        cenas: List[Dict[str, float]] = []
         if tipo == "video":
             real = get_media_duration(local)
             trim_end = round(min(duracao, real), 2) if real > 0 else duracao
+
+            # PySceneDetect (CPU, leve): alinha o corte a uma cena inteira.
+            # Sem a lib, segue o corte simples — o render nao depende disso.
+            if usar_cenas and encontrado.get("fonte") == "YouTube":
+                try:
+                    from local_tools import detectar_cenas
+
+                    cenas = detectar_cenas(local)
+                    total_cenas += len(cenas)
+                except Exception as err:
+                    print(f"[MediaScout] deteccao de cenas ignorada: {err}")
+
+        if cenas and trim_end > 0:
+            # Mantem o inicio do clipe intacto; apenas ajusta o fim para nao
+            # interromper uma cena no meio. Nunca alonga a duracao pedida.
+            limites = [
+                c["fim"] for c in cenas
+                if 0.6 * trim_end <= c["fim"] <= trim_end + 0.05
+            ]
+            if limites:
+                trim_end = round(max(limites), 2)
 
         storage_key = f"projects/{project_id}/media/{nome_arquivo}"
         upload_file(local, storage_key)
@@ -606,6 +630,7 @@ def build_auto_timeline(
                 "trim_end": trim_end,
                 "auto": True,
                 "query": query,
+                "cenas": cenas[:12],
             }
         )
         creditos.append(
@@ -641,13 +666,15 @@ def build_auto_timeline(
         "videos": sum(1 for t in timeline if t["type"] == "video"),
         "imagens": sum(1 for t in timeline if t["type"] == "image"),
         "fontes_usadas": sorted(usadas),
+        "cenas_detectadas": total_cenas,
         "creditos": creditos,
         "timeline": timeline,
         "arquivo_creditos": f"projects/{project_id}/media/credits.json",
         "dica": (
             "YouTube vem primeiro (yt-dlp local, sem chave): cole uma URL por bloco "
-            "ou deixe a busca ytsearch decidir. Se falhar, cai para Pexels/Pixabay/"
-            "Openverse/Wikimedia e, no ultimo caso, slide local. Use apenas clipes "
-            "proprios ou autorizados — creditos em media/credits.json."
+            "ou deixe a busca ytsearch decidir. Se falhar, cai para Unsplash/"
+            "Openverse/Wikimedia e, no ultimo caso, slide local. PySceneDetect "
+            "(quando instalado) ajusta o fim do clipe a uma cena completa. "
+            "Use apenas clipes proprios ou autorizados — creditos em media/credits.json."
         ),
     }

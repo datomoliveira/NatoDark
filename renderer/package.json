@@ -1,0 +1,19 @@
+{
+  "name": "natodark-hyperframes",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Gerador de composicoes HyperFrames a partir da timeline do NatoDark (render local, gratuito).",
+  "type": "module",
+  "scripts": {
+    "generate": "node generate.mjs",
+    "render": "hyperframes render --output final.mp4",
+    "check": "hyperframes check",
+    "lint": "hyperframes lint"
+  },
+  "dependencies": {
+    "hyperframes": "0.9.102"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
