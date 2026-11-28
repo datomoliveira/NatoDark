@@ -110,10 +110,14 @@ def main():
     from database import update_project_audio
     update_project_audio(project_id, audio_key, volume=1.2, fade_in=1.0, fade_out=1.0)
     
-    # Run compiler pipeline
-    print("Test: Triggering compilation pipeline...")
+    # Run compiler pipeline (opcional: "ffmpeg" ou "hyperframes" como argv[1])
+    engine_arg = sys.argv[1] if len(sys.argv) > 1 else None
+    if engine_arg and engine_arg not in ("ffmpeg", "hyperframes"):
+        print(f"Test Error: engine invalida: {engine_arg}")
+        sys.exit(1)
+    print(f"Test: Triggering compilation pipeline (engine={engine_arg or 'padrao'})...")
     try:
-        output_key = compile_project_pipeline(project_id)
+        output_key = compile_project_pipeline(project_id, engine=engine_arg)
         print(f"Test: COMPILATION SUCCESSFUL! Output key: {output_key}")
         
         # Verify output exists in storage

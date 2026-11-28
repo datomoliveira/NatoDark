@@ -52,14 +52,16 @@ async def compilation_worker():
             job_type = job.get("type")
             if job_type == "single":
                 project_id = job["project_id"]
+                engine = job.get("engine")
                 try:
-                    compile_project_pipeline(project_id)
+                    compile_project_pipeline(project_id, engine=engine)
                 except Exception as e:
                     print(f"Worker Error: Project {project_id} failed to compile: {e}")
             elif job_type == "batch":
                 batch_id = job["batch_id"]
+                engine = job.get("engine")
                 try:
-                    await run_batch_compilation(batch_id)
+                    await run_batch_compilation(batch_id, engine=engine)
                 except Exception as e:
                     print(f"Worker Error: Batch {batch_id} failed to compile: {e}")
         except asyncio.CancelledError:
@@ -70,7 +72,7 @@ async def compilation_worker():
         finally:
             compilation_queue.task_done()
 
-async def run_batch_compilation(batch_id: str):
+async def run_batch_compilation(batch_id: str, engine: Optional[str] = None):
     print(f"Batch Compiler: Starting batch {batch_id}")
     batch = get_batch(batch_id)
     if not batch:
@@ -88,7 +90,7 @@ async def run_batch_compilation(batch_id: str):
         
         try:
             # Trigger compile pipeline
-            compile_project_pipeline(p_id)
+            compile_project_pipeline(p_id, engine=engine)
             compiled_project_ids.append(p_id)
         except Exception as e:
             print(f"Batch Compiler: Project {p_id} failed during batch execution: {e}")
@@ -272,6 +274,23 @@ class ModelHealthRequest(BaseModel):
     servico: Optional[str] = None
     tentativas: Optional[int] = None
     testar_todos: bool = False
+
+class CompileRequest(BaseModel):
+    engine: Optional[str] = None
+
+RENDER_ENGINES = ("ffmpeg", "hyperframes")
+
+def validar_engine(engine: Optional[str]) -> Optional[str]:
+    """Normaliza a engine pedida pela UI; None mantem o padrão do .env."""
+    if engine is None:
+        return None
+    engine = engine.strip().lower()
+    if engine not in RENDER_ENGINES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Engine de render invalida: {engine}. Use 'ffmpeg' ou 'hyperframes'."
+        )
+    return engine
 
 
 # Serve static storage files if Backblaze B2 is fallback local
@@ -721,14 +740,16 @@ async def save_audio_parameters(id: str, body: AudioParameters):
     return {"status": "sucesso", "message": "Parâmetros de áudio salvos."}
 
 @app.post("/api/projects/{id}/compile")
-async def compile_project_endpoint(id: str):
+async def compile_project_endpoint(id: str, body: Optional[CompileRequest] = None):
     p = get_project(id)
     if not p:
         raise HTTPException(status_code=404, detail="Projeto não encontrado.")
-        
+
+    engine = validar_engine(body.engine if body else None)
+
     if p["status"] == "compilando":
-        return {"status": "compilando", "message": "Projeto já está na fila/compilando."}
-        
+        return {"status": "compilando", "message": "Projeto já está na fila/compilando.", "engine": engine}
+
     # Queue single compilation job
     update_project_status(id, "compilando")
     # Clean compile log file if exists
@@ -737,9 +758,14 @@ async def compile_project_endpoint(id: str):
         log_path = os.path.join(log_dir, "compile.log")
         if os.path.exists(log_path):
             os.remove(log_path)
-            
-    await compilation_queue.put({"type": "single", "project_id": id})
-    return {"status": "enfileirado", "message": "Projeto adicionado à fila de compilação sequencial."}
+
+    log_compile(id, f"Engine solicitada pela página: {engine or 'padrão (.env)'}.")
+    await compilation_queue.put({"type": "single", "project_id": id, "engine": engine})
+    return {
+        "status": "enfileirado",
+        "message": "Projeto adicionado à fila de compilação sequencial.",
+        "engine": engine,
+    }
 
 @app.get("/api/projects/{id}/compile/status")
 async def get_project_compile_status(id: str):
@@ -888,21 +914,27 @@ async def create_compilation_batch(batch_data: BatchCreate):
     return {"batch_id": batch_id, "projects": created_projects}
 
 @app.post("/api/batch/{batch_id}/compile")
-async def compile_batch_endpoint(batch_id: str):
+async def compile_batch_endpoint(batch_id: str, body: Optional[CompileRequest] = None):
     batch = get_batch(batch_id)
     if not batch:
         raise HTTPException(status_code=404, detail="Lote não encontrado.")
-        
+
+    engine = validar_engine(body.engine if body else None)
+
     if batch["status"] == "processing":
-        return {"status": "processing", "message": "Lote já está sendo processado."}
-        
+        return {"status": "processing", "message": "Lote já está sendo processado.", "engine": engine}
+
     # Mark all inner projects as compilando
     for p in batch["projects"]:
         update_project_status(p["id"], "compilando")
-        
+
     update_batch_progress(batch_id, "processing", 0.0)
-    await compilation_queue.put({"type": "batch", "batch_id": batch_id})
-    return {"status": "enfileirado", "message": "Lote adicionado à fila sequencial."}
+    await compilation_queue.put({"type": "batch", "batch_id": batch_id, "engine": engine})
+    return {
+        "status": "enfileirado",
+        "message": "Lote adicionado à fila sequencial.",
+        "engine": engine,
+    }
 
 @app.get("/api/batch/{batch_id}/status")
 async def get_batch_status(batch_id: str):

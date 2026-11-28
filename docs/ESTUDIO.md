@@ -288,10 +288,12 @@ A análise completa de viabilidade, licença, custo e hardware está em
 - `GET /api/tools` mostra o que está realmente instalado e se cada ferramenta
   é efetiva no canal monetizado.
 - **Ativas**: FFmpeg, PySceneDetect (cenas) e YuNet (crop com rosto).
-- **Engine de render**: `RENDER_ENGINE=ffmpeg` (padrão) ou `hyperframes`.
-  Para usar o HyperFrames: `npm install --prefix renderer` e reiniciar o backend.
-  Render local gratuito, Apache-2.0, sem watermark; se faltar Chrome/ffprobe,
-  o compiler volta para o ffmpeg sozinho.
+- **Engine de render**: seletor **FFmpeg / HyperFrames** na tela do projeto
+  (ao lado de **Compilar Vídeo**) define a engine por compilação e lembra a
+  escolha no navegador. Sem seleção, vale `RENDER_ENGINE=ffmpeg` (padrão) do
+  `.env`. Para usar o HyperFrames: `npm install --prefix renderer`; não é
+  preciso reiniciar o backend. Render local gratuito, Apache-2.0, sem watermark;
+  se faltar Chrome/ffprobe, o compiler volta para o ffmpeg sozinho.
 - **Opcionais pesadas** (`backend/requirements-ml.txt`): WhisperX, MediaPipe,
   BEN2, Depth Anything **Small**, CLAP e SAM 2 (este último exige GPU).
 - **Desligadas por licença**: Demucs (pesos sem licença clara) e Depth Anything
@@ -308,3 +310,7 @@ A análise completa de viabilidade, licença, custo e hardware está em
 - PySceneDetect, YuNet e HyperFrames: testados de ponta a ponta; compile com
   `RENDER_ENGINE=hyperframes` gerou `final.mp4` com legenda e narração (fallback
   automático para ffmpeg se faltar Chrome/ffprobe).
+- Seletor de engine: `POST /api/projects/{id}/compile` aceita
+  `{"engine":"ffmpeg"|"hyperframes"}` (400 para valor inválido); os dois
+  caminhos foram testados, incluindo HyperFrames real com `ffmpeg`/`ffprobe`
+  disponíveis via `NATODARK_HYPERFRAMES_BIN`.

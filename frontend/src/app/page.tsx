@@ -27,7 +27,8 @@ import {
   FileAudio,
   Sparkles,
   Mic,
-  TrendingUp
+  TrendingUp,
+  Cpu
 } from "lucide-react";
 
 // API Base: local por padrao; em producao defina NEXT_PUBLIC_API_BASE
@@ -112,6 +113,9 @@ export default function NatoDarkStudio() {
   const [audioKey, setAudioKey] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   
+  // Engine de render usada nesta compilação (persistida no navegador).
+  const [renderEngine, setRenderEngine] = useState<"ffmpeg" | "hyperframes">("ffmpeg");
+
   // Compile Log states
   const [compileLogs, setCompileLogs] = useState("");
   const [compileStatus, setCompileStatus] = useState("rascunho");
@@ -162,10 +166,21 @@ export default function NatoDarkStudio() {
     setTimeout(() => setNotification(null), 5000);
   };
 
+  const selectRenderEngine = (engine: "ffmpeg" | "hyperframes") => {
+    setRenderEngine(engine);
+    window.localStorage.setItem("natodark.renderEngine", engine);
+  };
+
   // 1. Initial Load of Projects and Clips Bank
   useEffect(() => {
     fetchProjects();
     fetchClipsBank();
+  }, []);
+
+  // Restaura a engine escolhida na ultima sessao.
+  useEffect(() => {
+    const saved = window.localStorage.getItem("natodark.renderEngine");
+    if (saved === "ffmpeg" || saved === "hyperframes") setRenderEngine(saved);
   }, []);
 
   // Polling for compilation status
@@ -754,8 +769,14 @@ export default function NatoDarkStudio() {
     try {
       showToast("success", "Enfileirando projeto para compilação...");
       const res = await fetch(`${API_BASE}/api/projects/${selectedProjectId}/compile`, {
-        method: "POST"
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ engine: renderEngine })
       });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}));
+        throw new Error(detail.detail || "Falha ao enfileirar a compilação.");
+      }
       const data = await res.json();
       setCompileStatus("compilando");
       setIsCompiling(true);
@@ -1327,21 +1348,54 @@ export default function NatoDarkStudio() {
                       </button>
                     )}
 
-                    <button
-                      onClick={startCompile}
-                      disabled={isCompiling || editorTimeline.length === 0}
-                      className="px-5 py-2.5 bg-[#8B0000] hover:bg-[#a60000] text-white text-xs font-bold rounded-lg flex items-center gap-2 disabled:opacity-50 border border-red-900 shadow-[0_4px_12px_rgba(139,0,0,0.3)] cursor-pointer"
-                    >
-                      {isCompiling ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" /> Compilando...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-4 h-4" /> Compilar Vídeo
-                        </>
-                      )}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="flex items-center gap-1 rounded-lg border border-[#2a2a2a] bg-[#0c0c0c] p-1"
+                        role="group"
+                        aria-label="Engine de renderização"
+                      >
+                        <Cpu className="w-3.5 h-3.5 text-[#666] ml-1 shrink-0" aria-hidden="true" />
+                        {(["ffmpeg", "hyperframes"] as const).map((engine) => {
+                          const ativo = renderEngine === engine;
+                          return (
+                            <button
+                              key={engine}
+                              type="button"
+                              onClick={() => selectRenderEngine(engine)}
+                              disabled={isCompiling}
+                              aria-pressed={ativo}
+                              title={
+                                engine === "hyperframes"
+                                  ? "Requer Chrome e ffmpeg/ffprobe locais"
+                                  : "Engine padrão, sem dependência de Chrome"
+                              }
+                              className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                                ativo
+                                  ? "bg-[#8B0000] text-white shadow-[0_2px_8px_rgba(139,0,0,0.35)]"
+                                  : "text-gray-500 hover:text-gray-200 hover:bg-[#1a1a1a]"
+                              }`}
+                            >
+                              {engine === "ffmpeg" ? "FFmpeg" : "HyperFrames"}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button
+                        onClick={startCompile}
+                        disabled={isCompiling || editorTimeline.length === 0}
+                        className="px-5 py-2.5 bg-[#8B0000] hover:bg-[#a60000] text-white text-xs font-bold rounded-lg flex items-center gap-2 disabled:opacity-50 border border-red-900 shadow-[0_4px_12px_rgba(139,0,0,0.3)] cursor-pointer"
+                      >
+                        {isCompiling ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" /> Compilando...
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-4 h-4" /> Compilar Vídeo
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
 

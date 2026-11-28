@@ -4,7 +4,7 @@ import subprocess
 import json
 import shutil
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 import imageio_ffmpeg
 from database import (
     get_project, update_project_status, 
@@ -252,17 +252,24 @@ def _renderizar_hyperframes(
 
 
 # Compile single project process
-def compile_project_pipeline(project_id: str) -> str:
+def compile_project_pipeline(project_id: str, engine: Optional[str] = None) -> str:
     """
     Executes the compile sequence for a project.
     Returns the storage key of the compiled video or raises an exception.
+    `engine` ("ffmpeg" | "hyperframes") overrides RENDER_ENGINE for this job.
     """
     log_compile(project_id, "Iniciando compilação do projeto.")
     update_project_status(project_id, "compilando")
-    
+
     project = get_project(project_id)
     if not project:
         raise ValueError(f"Project {project_id} not found in database.")
+
+    engine_solicitada = (engine or os.environ.get("RENDER_ENGINE", "ffmpeg")).strip().lower()
+    if engine_solicitada not in ("ffmpeg", "hyperframes"):
+        log_compile(project_id, f"Engine '{engine_solicitada}' inválida; usando ffmpeg.")
+        engine_solicitada = "ffmpeg"
+    log_compile(project_id, f"Engine de render selecionada: {engine_solicitada}.")
     
     # Create isolated temp folder for compilation
     temp_dir = os.path.join(os.path.dirname(__file__), "temp", project_id)
@@ -384,7 +391,7 @@ def compile_project_pipeline(project_id: str) -> str:
         #    cai para o concat demuxer do ffmpeg se ele nao estiver disponivel).
         concat_video_path = os.path.join(temp_dir, "concatenated.mp4")
         usou_hyperframes = False
-        if os.environ.get("RENDER_ENGINE", "ffmpeg").strip().lower() == "hyperframes":
+        if engine_solicitada == "hyperframes":
             usou_hyperframes = _renderizar_hyperframes(
                 project_id, normalized_itens, temp_dir, concat_video_path, width, height
             )
